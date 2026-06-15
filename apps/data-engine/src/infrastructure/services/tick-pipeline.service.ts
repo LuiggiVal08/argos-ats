@@ -10,6 +10,7 @@ import { IngestTickUseCase } from "../../application/use-cases/ingest-tick.useca
 import { BufferTickUseCase } from "../../application/use-cases/buffer-tick.usecase"
 import { FlushBufferUseCase } from "../../application/use-cases/flush-buffer.usecase"
 import { HealthMonitorUseCase } from "../../application/use-cases/health-monitor.usecase"
+import { StreamName } from "../../domain/value-objects/stream-name"
 import { InMemoryTickBuffer } from "../messaging/in-memory-tick-buffer"
 import {
   EXCHANGE_GATEWAY,
@@ -21,6 +22,8 @@ const log = (m: string): void => {
   // eslint-disable-next-line no-console
   console.log(m)
 }
+
+const PREFIX = process.env.STREAM_PREFIX ?? "ticks:"
 
 @Injectable()
 export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
@@ -40,27 +43,22 @@ export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    log(
-      `[pipeline] starting. buffer=${this.tickBuffer.capacity()} monitor=bus`,
-    )
+    log(`[pipeline] starting. buffer=${this.tickBuffer.capacity()} monitor=bus`)
     this.monitor.start()
     this.pollHandle = setInterval(() => {
       void this.monitorUc.tick()
     }, 1000)
 
     try {
-      await this.exchange.start(async (tick: import("../../domain/entities/tick").Tick) => {
-        const r = await this.ingest.execute(tick)
+      await this.exchange.start(async (tick) => {
+        const stream = StreamName.forTicks(tick.symbol, PREFIX)
+        const r = await this.ingest.execute(tick, stream)
         if (r.buffered) {
-          log(
-            `[pipeline] tick ${tick.tradeId} buffered (size=${this.tickBuffer.size()})`,
-          )
+          log(`[pipeline] tick ${tick.tradeId} buffered (size=${this.tickBuffer.size()})`)
         }
       })
     } catch (err) {
-      log(
-        `[pipeline] exchange start failed: ${(err as Error).message} — retrying in background`,
-      )
+      log(`[pipeline] exchange start failed: ${(err as Error).message} — retrying in background`)
     }
   }
 
@@ -74,9 +72,7 @@ export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
     const drained = this.tickBuffer.size()
     if (drained > 0) {
       log(`[pipeline] draining ${drained} buffered ticks before shutdown`)
-      try {
-        await this.flush.execute()
-      } catch (e) {
+      try { await this.flush.execute() } catch (e) {
         log(`[pipeline] drain error: ${(e as Error).message}`)
       }
     }

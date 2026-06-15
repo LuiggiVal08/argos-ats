@@ -13,7 +13,7 @@ export class RedisFeaturePublisher implements FeaturePublisher {
   private readonly prefix: string
 
   constructor(opts: RedisFeaturePublisherOptions) {
-    this.client = new Redis({
+    this.client = new Redis(opts.url, {
       connectTimeout: opts.connectTimeoutMs ?? 2000,
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,

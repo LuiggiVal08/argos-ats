@@ -119,12 +119,14 @@ const bufferUseCaseProvider: Provider = {
 
 const flushProvider: Provider = {
   provide: FlushBufferUseCase,
-  inject: [BUS, TICK_BUFFER, STREAM_NAME],
+  inject: [BUS, TICK_BUFFER],
   useFactory: (
     bus: RedisProtocolBus,
     buffer: InMemoryTickBuffer,
-    stream: StreamName,
-  ): FlushBufferUseCase => new FlushBufferUseCase(bus, buffer, stream),
+  ): FlushBufferUseCase => {
+    const prefix = process.env.STREAM_PREFIX ?? "ticks:"
+    return new FlushBufferUseCase(bus, buffer, prefix)
+  },
 }
 
 const healthMonitorUseCaseProvider: Provider = {
