@@ -7,6 +7,7 @@ import {
   EXCHANGE_GATEWAY,
   HEALTH_MONITOR,
   STREAM_NAME,
+  SYMBOLS,
   TICK_BUFFER,
   CANDLE_STORE,
   CANDLE_PUBLISHER,
@@ -15,12 +16,15 @@ import {
   EVENT_STORE,
 } from "./infrastructure/config/tokens"
 import { RedisProtocolBus } from "./infrastructure/messaging/redis-protocol-bus"
-import { createExchangeAdapter } from "./infrastructure/messaging/exchange-adapter.factory"
+import {
+  createExchangeAdapter,
+  parseSymbols,
+} from "./infrastructure/messaging/exchange-adapter.factory"
 import { InMemoryTickBuffer } from "./infrastructure/messaging/in-memory-tick-buffer"
 import { BusHealthMonitor } from "./infrastructure/messaging/bus-health-monitor"
 import { InMemoryCandleStore } from "./infrastructure/messaging/in-memory-candle-store"
 import { RedisCandlePublisher } from "./infrastructure/messaging/redis-candle-publisher"
-import { Symbol } from "./domain/value-objects/symbol"
+import { Symbol as SymbolVo } from "./domain/value-objects/symbol"
 import { StreamName } from "./domain/value-objects/stream-name"
 import { IngestTickUseCase } from "./application/use-cases/ingest-tick.usecase"
 import { BufferTickUseCase } from "./application/use-cases/buffer-tick.usecase"
@@ -45,12 +49,20 @@ const log = (m: string): void => {
   console.log(m)
 }
 
+const symbolsProvider: Provider = {
+  provide: SYMBOLS,
+  useFactory: (): SymbolVo[] => {
+    const envVal = process.env.SYMBOL
+    return envVal ? parseSymbols(envVal) : [SymbolVo.parse("BTC/USDT")]
+  },
+}
+
 const streamNameProvider: Provider = {
   provide: STREAM_NAME,
-  useFactory: (): StreamName => {
-    const symbol = process.env.SYMBOL ?? "BTC/USDT"
+  inject: [SYMBOLS],
+  useFactory: (symbols: SymbolVo[]): StreamName => {
     const prefix = process.env.STREAM_PREFIX ?? "ticks:"
-    return StreamName.forTicks(Symbol.parse(symbol), prefix)
+    return StreamName.forTicks(symbols[0], prefix)
   },
 }
 
@@ -201,6 +213,7 @@ const replayProvider: Provider = {
   imports: [ConfigModule.forRoot({ isGlobal: true })],
   controllers: [HealthController, HealthControllerBus],
   providers: [
+    symbolsProvider,
     streamNameProvider,
     busProvider,
     tickBufferProvider,

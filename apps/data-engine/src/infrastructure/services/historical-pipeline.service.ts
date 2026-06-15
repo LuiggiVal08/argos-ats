@@ -1,7 +1,8 @@
 import { Injectable, Inject, OnModuleDestroy, OnModuleInit, Logger } from "@nestjs/common"
 import Redis from "ioredis"
-import { EVENT_STORE } from "../config/tokens"
+import { SYMBOLS, EVENT_STORE } from "../config/tokens"
 import { EventStore } from "../../application/ports/event-store.port"
+import { Symbol as SymbolVo } from "../../domain/value-objects/symbol"
 import { TickData, CandleData } from "../../domain/entities/historical-event"
 import { FeatureVectorData } from "../../domain/entities/feature-vector"
 import { Timeframe } from "../../domain/value-objects/timeframe"
@@ -20,36 +21,45 @@ interface StreamSub {
   }
 }
 
+function buildSubs(symbols: SymbolVo[]): StreamSub[] {
+  const subs: StreamSub[] = []
+  for (const sym of symbols) {
+    const sid = sym.toStreamId().toLowerCase()
+    subs.push({
+      stream: `ticks:${sid}`,
+      kind: "tick",
+      parse: (r) => ({ tick: r as unknown as TickData }),
+    })
+    for (const tf of Timeframe.ALL) {
+      subs.push({
+        stream: `candles:${sid}:${tf}`,
+        kind: "candle",
+        parse: (r) => ({ candle: { ...r, isComplete: true } as unknown as CandleData }),
+      })
+    }
+    for (const tf of Timeframe.ALL) {
+      subs.push({
+        stream: `features:${sid}:${tf}`,
+        kind: "feature",
+        parse: (r) => ({ feature: r as unknown as FeatureVectorData }),
+      })
+    }
+  }
+  return subs
+}
+
 @Injectable()
 export class HistoricalPipelineService implements OnModuleInit, OnModuleDestroy {
   private client: Redis | null = null
   private timer: ReturnType<typeof setInterval> | null = null
+  private readonly subs: StreamSub[]
 
-  private subs: StreamSub[] = [
-    {
-      stream: "ticks:btcusdt",
-      kind: "tick",
-      parse: (r) => ({
-        tick: r as unknown as TickData,
-      }),
-    },
-    ...Timeframe.ALL.map((tf) => ({
-      stream: `candles:btcusdt:${tf}`,
-      kind: "candle" as const,
-      parse: (r: Record<string, unknown>) => ({
-        candle: { ...r, isComplete: true } as unknown as CandleData,
-      }),
-    })),
-    ...Timeframe.ALL.map((tf) => ({
-      stream: `features:btcusdt:${tf}`,
-      kind: "feature" as const,
-      parse: (r: Record<string, unknown>) => ({
-        feature: r as unknown as FeatureVectorData,
-      }),
-    })),
-  ]
-
-  constructor(@Inject(EVENT_STORE) private readonly store: EventStore) {}
+  constructor(
+    @Inject(EVENT_STORE) private readonly store: EventStore,
+    @Inject(SYMBOLS) _symbols: SymbolVo[],
+  ) {
+    this.subs = buildSubs(_symbols)
+  }
 
   async onModuleInit(): Promise<void> {
     const url = process.env.ARGOS_BROKER_URL
@@ -63,7 +73,7 @@ export class HistoricalPipelineService implements OnModuleInit, OnModuleDestroy 
       enableOfflineQueue: false,
     })
     this.poll()
-    log("started")
+    log(`started — polling ${this.subs.length} historical streams`)
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -80,9 +90,8 @@ export class HistoricalPipelineService implements OnModuleInit, OnModuleDestroy 
 
   private poll(): void {
     const lastIds: Record<string, string> = {}
-    for (const sub of this.subs) {
-      lastIds[sub.stream] = "$"
-    }
+    for (const sub of this.subs) lastIds[sub.stream] = "$"
+
     this.timer = setInterval(async () => {
       if (!this.client) return
       for (const sub of this.subs) {
@@ -92,9 +101,7 @@ export class HistoricalPipelineService implements OnModuleInit, OnModuleDestroy 
               xread: (...args: Array<string | number>) => Promise<unknown>
             }
           ).xread(
-            "BLOCK", 50,
-            "COUNT", 20,
-            "STREAMS", sub.stream, lastIds[sub.stream],
+            "BLOCK", 50, "COUNT", 20, "STREAMS", sub.stream, lastIds[sub.stream],
           )) as Array<[string, Array<[string, string[]]>]> | null
           if (!res) continue
           for (const [, entries] of res) {
@@ -119,9 +126,7 @@ export class HistoricalPipelineService implements OnModuleInit, OnModuleDestroy 
               }
             }
           }
-        } catch (e) {
-          // stream may not exist yet — skip
-        }
+        } catch { /* stream may not exist yet — skip */ }
       }
     }, 2_000)
   }

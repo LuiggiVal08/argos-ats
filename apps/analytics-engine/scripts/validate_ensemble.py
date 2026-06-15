@@ -124,6 +124,9 @@ async def _main() -> None:
     print(f"  Features: {len(model.config.features)}, lookback: {model.config.lookback}")
 
     # ── Load test data ──────────────────────────────────────────────
+    feat_mode = "precomputed"
+    df_feat_cache = None
+    targets_from_parquet = None
     if args.data_dir:
         import pandas as pd
         feat_path = os.path.join(args.data_dir, "features.parquet")
@@ -133,14 +136,16 @@ async def _main() -> None:
             sys.exit(1)
         df_feat = pd.read_parquet(feat_path)
         df_tgt = pd.read_parquet(tgt_path)
-        required = {"timestamp", "open", "high", "low", "close", "volume"}
-        missing = required - set(df_feat.columns)
-        if missing:
-            print(f"  ✗ Parquet missing columns: {missing}")
-            sys.exit(1)
-        ohlcv = df_feat.to_dict(orient="records")
-        targets_from_parquet = df_tgt.values if "target" in df_tgt.columns else None
-        print(f"  Loaded {len(ohlcv)} samples from {args.data_dir}")
+        required_raw = {"timestamp", "open", "high", "low", "close", "volume"}
+        if required_raw.issubset(set(df_feat.columns)):
+            feat_mode = "raw"
+            ohlcv = df_feat.to_dict(orient="records")
+            targets_from_parquet = df_tgt.values if "target" in df_tgt.columns else None
+            print(f"  Loaded {len(ohlcv)} OHLCV samples from {args.data_dir}")
+        else:
+            df_feat_cache = df_feat
+            targets_from_parquet = df_tgt.values if "target" in df_tgt.columns else None
+            print(f"  Loaded {len(df_feat)} precomputed feature samples from {args.data_dir}")
     else:
         print("  Fetching fresh data from CCXT...")
         source = _CcxtOhlcvSource()
@@ -149,37 +154,66 @@ async def _main() -> None:
         print(f"  Fetched {len(ohlcv)} candles")
 
     # ── Build features + targets ────────────────────────────────────
-    print("  Building features...")
-    features_raw = await preprocessor.build_features(ohlcv, cfg)
-    if targets_from_parquet is not None:
-        targets = targets_from_parquet
+    if feat_mode == "precomputed" and df_feat_cache is not None:
+        # Precomputed features: use directly, insert ADX col at position 16 if missing
+        cols = list(df_feat_cache.columns)
+        n_feat = df_feat_cache.shape[1]
+        if n_feat < len(cfg.features):
+            missing_ft = set(cfg.features) - set(cols)
+            if "adx" in missing_ft:
+                idx = cfg.features.index("adx")
+                df_feat_cache.insert(idx, "adx", 25.0)
+        features_raw = df_feat_cache.values.astype(np.float64)
+        if targets_from_parquet is not None:
+            targets = targets_from_parquet.astype(np.float64)
+        else:
+            targets = np.zeros((len(features_raw), 3))
+            targets[:, 2] = 1.0
+        min_len = min(len(features_raw), len(targets))
+        features_raw = features_raw[-min_len:]
+        targets = targets[-min_len:]
+        test_size = max(200, int(len(features_raw) * 0.2))
+        test_features = features_raw[-test_size:]
+        test_targets = targets[-test_size:]
+        feat_idx = {name: i for i, name in enumerate(cfg.features)}
+        print(f"  Test set: {test_size} samples (precomputed features)")
+        aligned_targets = test_targets
+        n_val = len(aligned_targets)
+        if n_val == 0:
+            print("  ✗ No samples after loading")
+            sys.exit(1)
     else:
-        targets = await preprocessor.create_targets(ohlcv, cfg)
-    min_len = min(len(features_raw), len(targets))
-    features_raw = features_raw[-min_len:]
-    targets = targets[-min_len:]
+        print("  Building features...")
+        features_raw = await preprocessor.build_features(ohlcv, cfg)
+        if targets_from_parquet is not None:
+            targets = targets_from_parquet
+        else:
+            targets = await preprocessor.create_targets(ohlcv, cfg)
+        min_len = min(len(features_raw), len(targets))
+        features_raw = features_raw[-min_len:]
+        targets = targets[-min_len:]
 
-    # Hold out last 20% as test set
-    test_size = max(200, int(len(features_raw) * 0.2))
-    test_features = features_raw[-test_size:]
-    test_targets = targets[-test_size:]
-    feat_idx = {name: i for i, name in enumerate(cfg.features)}
-    print(f"  Test set: {test_size} samples")
+        # Hold out last 20% as test set
+        test_size = max(200, int(len(features_raw) * 0.2))
+        test_features = features_raw[-test_size:]
+        test_targets = targets[-test_size:]
+        feat_idx = {name: i for i, name in enumerate(cfg.features)}
+        print(f"  Test set: {test_size} samples")
 
-    # ── Normalize ───────────────────────────────────────────────────
-    means = np.array(model.feature_means, dtype=np.float64)
-    stds = np.array(model.feature_stds, dtype=np.float64) + 1e-6
-    features_norm = (test_features - means) / stds
+        # ── Normalize ───────────────────────────────────────────────────
+        means = np.array(model.feature_means, dtype=np.float64)
+        stds = np.array(model.feature_stds, dtype=np.float64) + 1e-6
+        features_norm = (test_features - means) / stds
 
-    # ── Create windows ──────────────────────────────────────────────
-    windows = await preprocessor.create_windows(features_norm, cfg.lookback)
-    aligned_targets = test_targets[cfg.lookback - 1:]
-    aligned_targets = aligned_targets[:len(windows)]
-    n_val = len(windows)
-    if n_val == 0:
-        print("  ✗ No windows after preprocessing")
-        sys.exit(1)
-    print(f"  Windows: {n_val}")
+        # ── Create windows ──────────────────────────────────────────────
+        windows = await preprocessor.create_windows(features_norm, cfg.lookback)
+        aligned_targets = test_targets[cfg.lookback - 1:]
+        aligned_targets = aligned_targets[:len(windows)]
+        n_val = len(windows)
+        if n_val == 0:
+            print("  ✗ No windows after preprocessing")
+            sys.exit(1)
+        print(f"  Windows: {n_val}")
 
     # ── Run inference ───────────────────────────────────────────────
     from app.domain.value_objects.signal_side import SignalSide
@@ -340,7 +374,7 @@ async def _main() -> None:
             brier=BrierScore(overall=0.0, per_class=(0.0, 0.0, 0.0)),
             ece=ECE(overall=0.0, n_bins=10),
         )
-        status_cal = CheckStatus.SKIP
+        status_cal = CheckStatus.ERROR
         msg_cal = "scikit-learn not available"
     checks.append(ValidationCheck(
         check_type=CheckType.CALIBRATION_CURVE, status=status_cal,

@@ -73,6 +73,9 @@ class FakeGateway implements ExchangeGateway {
   state(): ExchangeConnectionState {
     return this.stateValue
   }
+  exchangeInfo() {
+    return { reconnectAttempt: 0, totalReconnects: 0, connectedAt: null }
+  }
 }
 
 class FakeMonitor implements HealthMonitor {

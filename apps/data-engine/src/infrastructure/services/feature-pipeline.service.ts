@@ -1,9 +1,10 @@
-import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from "@nestjs/common"
+import { Injectable, OnModuleDestroy, OnModuleInit, Logger, Inject } from "@nestjs/common"
 import Redis from "ioredis"
 import { Candle } from "../../domain/entities/candle"
 import { Symbol as SymbolVo } from "../../domain/value-objects/symbol"
 import { Timeframe } from "../../domain/value-objects/timeframe"
 import { CalculateFeaturesUseCase } from "../../application/use-cases/calculate-features.usecase"
+import { SYMBOLS } from "../config/tokens"
 
 const log = (m: string): void => {
   Logger.log(m, "FeaturePipelineService")
@@ -15,23 +16,35 @@ interface Subscription {
   timeframe: Timeframe
 }
 
+function buildSubscriptions(symbols: SymbolVo[]): Subscription[] {
+  const tfs = [Timeframe.ONE_MIN, Timeframe.FIVE_MIN, Timeframe.FIFTEEN_MIN, Timeframe.ONE_HOUR]
+  const subs: Subscription[] = []
+  for (const symbol of symbols) {
+    for (const tf of tfs) {
+      subs.push({
+        stream: `candles:${symbol.toStreamId().toLowerCase()}:${tf}`,
+        symbol,
+        timeframe: tf,
+      })
+    }
+  }
+  return subs
+}
+
 @Injectable()
 export class FeaturePipelineService implements OnModuleInit, OnModuleDestroy {
   private client: Redis | null = null
   private timer: ReturnType<typeof setInterval> | null = null
   private readonly buffer = new Map<string, Candle[]>()
   private readonly maxCandles = 100
-
-  private readonly subscriptions: Subscription[] = [
-    { stream: "candles:btcusdt:1m", symbol: SymbolVo.parse("BTC/USDT"), timeframe: Timeframe.ONE_MIN },
-    { stream: "candles:btcusdt:5m", symbol: SymbolVo.parse("BTC/USDT"), timeframe: Timeframe.FIVE_MIN },
-    { stream: "candles:btcusdt:15m", symbol: SymbolVo.parse("BTC/USDT"), timeframe: Timeframe.FIFTEEN_MIN },
-    { stream: "candles:btcusdt:1h", symbol: SymbolVo.parse("BTC/USDT"), timeframe: Timeframe.ONE_HOUR },
-  ]
+  private readonly subscriptions: Subscription[]
 
   constructor(
     private readonly calculateFeatures: CalculateFeaturesUseCase,
-  ) {}
+    @Inject(SYMBOLS) symbols: SymbolVo[],
+  ) {
+    this.subscriptions = buildSubscriptions(symbols)
+  }
 
   async onModuleInit(): Promise<void> {
     const url = process.env.ARGOS_BROKER_URL
@@ -45,7 +58,7 @@ export class FeaturePipelineService implements OnModuleInit, OnModuleDestroy {
       enableOfflineQueue: false,
     })
     this.poll()
-    log("started — polling candle streams every 1s")
+    log(`started — polling ${this.subscriptions.length} candle streams every 1s`)
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -54,11 +67,7 @@ export class FeaturePipelineService implements OnModuleInit, OnModuleDestroy {
       this.timer = null
     }
     if (this.client) {
-      try {
-        await this.client.quit()
-      } catch {
-        this.client.disconnect()
-      }
+      try { await this.client.quit() } catch { this.client.disconnect() }
       this.client = null
     }
     log("shutdown")
@@ -66,21 +75,14 @@ export class FeaturePipelineService implements OnModuleInit, OnModuleDestroy {
 
   private poll(): void {
     const lastIds: Record<string, string> = {}
-    for (const sub of this.subscriptions) {
-      lastIds[sub.stream] = "$"
-    }
+    for (const sub of this.subscriptions) lastIds[sub.stream] = "$"
+
     this.timer = setInterval(async () => {
       if (!this.client) return
       try {
         for (const sub of this.subscriptions) {
-          const blockMs = 100
-          const count = 10
           const result = await this.client.xread(
-            "COUNT", count,
-            "BLOCK", blockMs,
-            "STREAMS",
-            sub.stream,
-            lastIds[sub.stream],
+            "COUNT", 10, "BLOCK", 100, "STREAMS", sub.stream, lastIds[sub.stream],
           )
           if (!result) continue
           for (const [, messages] of result) {
@@ -122,9 +124,7 @@ export class FeaturePipelineService implements OnModuleInit, OnModuleDestroy {
     const k = this.key(symbol, timeframe)
     const arr = this.buffer.get(k) ?? []
     arr.push(candle)
-    if (arr.length > this.maxCandles) {
-      arr.splice(0, arr.length - this.maxCandles)
-    }
+    if (arr.length > this.maxCandles) arr.splice(0, arr.length - this.maxCandles)
     this.buffer.set(k, arr)
   }
 }

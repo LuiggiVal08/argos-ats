@@ -1,0 +1,31 @@
+la idea es que verifique que si el manifest existe
+que si ya esta un checkpoint lo salte
+una celda para las predicciones
+al entrenar que siga el flujo de entrenar lsm gxboos metamodel y lo que sigue
+coloca logs para ir viendo que esta procesando
+
+
+hay que revisar esto y colocar la ruta de healtcheck, creo que vi que si existe pero verifica por si acaso:
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [NestFactory] Starting Nest application...
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [InstanceLoader] ConfigHostModule dependencies initialized +38ms
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [InstanceLoader] ConfigModule dependencies initialized +2ms
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [InstanceLoader] AppModule dependencies initialized +3ms
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [RoutesResolver] HealthController {/health}: +9ms
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [RouterExplorer] Mapped {/health, GET} route +6ms
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [RoutesResolver] HealthControllerBus {/health/bus}: +1ms
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [RouterExplorer] Mapped {/health/bus, GET} route +0ms
+argos-data-engine       | [pipeline] starting. buffer=100 monitor=bus
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [FeaturePipelineService] started — polling candle streams every 1s
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [HistoricalPipelineService] started
+argos-data-engine       | [notif] consumer started on stream=notifications:events
+argos-data-engine       | [Nest] 1  - 06/15/2026, 2:48:56 PM     LOG [CandlePipelineService] subscribed to ticks:btcusdt
+argos-data-engine       | [data-engine] fatal init error Error: getaddrinfo EAI_AGAIN stream.binance.com
+argos-data-engine       |     at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:122:26) {
+argos-data-engine       |   errno: -3001,
+argos-data-engine       |   code: 'EAI_AGAIN',
+argos-data-engine       |   syscall: 'getaddrinfo',
+argos-data-engine       |   hostname: 'stream.binance.com'
+argos-data-engine       | }
+argos-data-engine       | error: getaddrinfo EAI_AGAIN stream.binance.com
+argos-data-engine       | closed code=1006 reason=
+argos-data-engine exited with code 1 (restarting)

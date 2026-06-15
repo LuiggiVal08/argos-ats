@@ -8,6 +8,7 @@ import { ExchangeGateway } from "../../application/ports/exchange-gateway.port"
 import { HealthMonitor } from "../../application/ports/health-monitor.port"
 import { IngestTickUseCase } from "../../application/use-cases/ingest-tick.usecase"
 import { BufferTickUseCase } from "../../application/use-cases/buffer-tick.usecase"
+import { FlushBufferUseCase } from "../../application/use-cases/flush-buffer.usecase"
 import { HealthMonitorUseCase } from "../../application/use-cases/health-monitor.usecase"
 import { InMemoryTickBuffer } from "../messaging/in-memory-tick-buffer"
 import {
@@ -35,6 +36,7 @@ export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
     private readonly monitorUc: HealthMonitorUseCase,
     @Inject(TICK_BUFFER)
     private readonly tickBuffer: InMemoryTickBuffer,
+    private readonly flush: FlushBufferUseCase,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -46,14 +48,20 @@ export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
       void this.monitorUc.tick()
     }, 1000)
 
-    await this.exchange.start(async (tick: import("../../domain/entities/tick").Tick) => {
-      const r = await this.ingest.execute(tick)
-      if (r.buffered) {
-        log(
-          `[pipeline] tick ${tick.tradeId} buffered (size=${this.tickBuffer.size()})`,
-        )
-      }
-    })
+    try {
+      await this.exchange.start(async (tick: import("../../domain/entities/tick").Tick) => {
+        const r = await this.ingest.execute(tick)
+        if (r.buffered) {
+          log(
+            `[pipeline] tick ${tick.tradeId} buffered (size=${this.tickBuffer.size()})`,
+          )
+        }
+      })
+    } catch (err) {
+      log(
+        `[pipeline] exchange start failed: ${(err as Error).message} — retrying in background`,
+      )
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -62,6 +70,17 @@ export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
       clearInterval(this.pollHandle)
       this.pollHandle = null
     }
+
+    const drained = this.tickBuffer.size()
+    if (drained > 0) {
+      log(`[pipeline] draining ${drained} buffered ticks before shutdown`)
+      try {
+        await this.flush.execute()
+      } catch (e) {
+        log(`[pipeline] drain error: ${(e as Error).message}`)
+      }
+    }
+
     await this.monitor.stop()
     await this.exchange.close()
   }

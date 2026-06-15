@@ -35,12 +35,24 @@ export class HealthController {
     connected: boolean
     lastTickAgeMs: number | null
     stale: boolean
+    reconnectAttempt: number
+    totalReconnects: number
+    connectedAt: number | null
   } {
     const state = this.exchange.state()
     const connected = state === "open"
     const lastTickAgeMs = this.exchange.lastTickAgeMs
     const stale =
       connected && lastTickAgeMs !== null && lastTickAgeMs > STALE_TICK_MS
-    return { state, connected, lastTickAgeMs, stale }
+    const info = this.exchange.exchangeInfo()
+    return {
+      state,
+      connected,
+      lastTickAgeMs,
+      stale,
+      reconnectAttempt: info.reconnectAttempt,
+      totalReconnects: info.totalReconnects,
+      connectedAt: info.connectedAt,
+    }
   }
 }
