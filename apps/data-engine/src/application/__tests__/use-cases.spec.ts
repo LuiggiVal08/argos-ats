@@ -128,8 +128,7 @@ describe("FlushBufferUseCase", () => {
   it("drains and publishes everything when broker is up", async () => {
     const bus = new FakeBus()
     const buf = new FakeBuffer()
-    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
-    const uc = new FlushBufferUseCase(bus, buf, stream)
+    const uc = new FlushBufferUseCase(bus, buf, "ticks:")
     await buf.push(makeTick(1))
     await buf.push(makeTick(2))
     const r = await uc.execute()
@@ -142,12 +141,11 @@ describe("FlushBufferUseCase", () => {
   it("stops flushing on first broker error (preserves remaining)", async () => {
     const bus = new FakeBus()
     const buf = new FakeBuffer()
-    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
     await buf.push(makeTick(1))
     await buf.push(makeTick(2))
     await buf.push(makeTick(3))
     bus.failPublish = true
-    const uc = new FlushBufferUseCase(bus, buf, stream)
+    const uc = new FlushBufferUseCase(bus, buf, "ticks:")
     const r = await uc.execute()
     expect(r.drained).toBe(3)
     expect(r.published).toBe(0)
@@ -165,8 +163,7 @@ describe("HealthMonitorUseCase", () => {
     const exchange = new FakeGateway()
     const bus = new FakeBus()
     const buf = new FakeBuffer()
-    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
-    const flush = new FlushBufferUseCase(bus, buf, stream)
+    const flush = new FlushBufferUseCase(bus, buf, "ticks:")
     const log: string[] = []
     const uc = new HealthMonitorUseCase(monitor, exchange, flush, {
       cutoffMs: 10_000,
@@ -190,8 +187,7 @@ describe("HealthMonitorUseCase", () => {
     const exchange = new FakeGateway()
     const bus = new FakeBus()
     const buf = new FakeBuffer()
-    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
-    const flush = new FlushBufferUseCase(bus, buf, stream)
+    const flush = new FlushBufferUseCase(bus, buf, "ticks:")
     const log: string[] = []
     const uc = new HealthMonitorUseCase(monitor, exchange, flush, {
       cutoffMs: 10_000,
