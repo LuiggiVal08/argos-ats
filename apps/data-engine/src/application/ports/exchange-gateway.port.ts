@@ -28,4 +28,10 @@ export interface ExchangeGateway {
 
   /** Current connection state. */
   state(): ExchangeConnectionState
+
+  /**
+   * Milliseconds since the last tick was received, or null if no
+   * tick has been received yet (e.g. connecting state).
+   */
+  lastTickAgeMs: number | null
 }

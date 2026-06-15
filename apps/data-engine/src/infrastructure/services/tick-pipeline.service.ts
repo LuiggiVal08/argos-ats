@@ -9,8 +9,6 @@ import { HealthMonitor } from "../../application/ports/health-monitor.port"
 import { IngestTickUseCase } from "../../application/use-cases/ingest-tick.usecase"
 import { BufferTickUseCase } from "../../application/use-cases/buffer-tick.usecase"
 import { HealthMonitorUseCase } from "../../application/use-cases/health-monitor.usecase"
-import { BinanceWebSocketAdapter } from "../messaging/binance-websocket.adapter"
-import { BusHealthMonitor } from "../messaging/bus-health-monitor"
 import { InMemoryTickBuffer } from "../messaging/in-memory-tick-buffer"
 import {
   EXCHANGE_GATEWAY,
@@ -23,11 +21,6 @@ const log = (m: string): void => {
   console.log(m)
 }
 
-/**
- * Wires the WS gateway to the use cases. NestJS lifecycle:
- *  - OnModuleInit: start the gateway and the health monitor.
- *  - OnModuleDestroy: orderly shutdown.
- */
 @Injectable()
 export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
   private pollHandle: NodeJS.Timeout | null = null
@@ -69,11 +62,7 @@ export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
       clearInterval(this.pollHandle)
       this.pollHandle = null
     }
-    if (this.monitor instanceof BusHealthMonitor) {
-      await this.monitor.stop()
-    }
-    if (this.exchange instanceof BinanceWebSocketAdapter) {
-      await this.exchange.close()
-    }
+    await this.monitor.stop()
+    await this.exchange.close()
   }
 }

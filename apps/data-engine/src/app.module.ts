@@ -15,7 +15,7 @@ import {
   EVENT_STORE,
 } from "./infrastructure/config/tokens"
 import { RedisProtocolBus } from "./infrastructure/messaging/redis-protocol-bus"
-import { BinanceWebSocketAdapter } from "./infrastructure/messaging/binance-websocket.adapter"
+import { createExchangeAdapter } from "./infrastructure/messaging/exchange-adapter.factory"
 import { InMemoryTickBuffer } from "./infrastructure/messaging/in-memory-tick-buffer"
 import { BusHealthMonitor } from "./infrastructure/messaging/bus-health-monitor"
 import { InMemoryCandleStore } from "./infrastructure/messaging/in-memory-candle-store"
@@ -35,6 +35,7 @@ import { FeaturePipelineService } from "./infrastructure/services/feature-pipeli
 import { TechnicalIndicatorCalculator } from "./infrastructure/indicators/technical-indicator-calculator"
 import { RedisFeaturePublisher } from "./infrastructure/messaging/redis-feature-publisher"
 import { EventStore } from "./application/ports/event-store.port"
+import { ExchangeGateway } from "./application/ports/exchange-gateway.port"
 import { FileEventStore } from "./infrastructure/storage/file-event-store"
 import { HistoricalPipelineService } from "./infrastructure/services/historical-pipeline.service"
 import { ReplayMarketUseCase } from "./application/use-cases/replay-market.usecase"
@@ -76,8 +77,8 @@ const tickBufferProvider: Provider = {
 
 const exchangeProvider: Provider = {
   provide: EXCHANGE_GATEWAY,
-  useFactory: (): BinanceWebSocketAdapter =>
-    new BinanceWebSocketAdapter({ logger: log }),
+  useFactory: (): ExchangeGateway =>
+    createExchangeAdapter(log),
 }
 
 const healthMonitorProvider: Provider = {
@@ -119,7 +120,7 @@ const healthMonitorUseCaseProvider: Provider = {
   inject: [HEALTH_MONITOR, EXCHANGE_GATEWAY, FlushBufferUseCase],
   useFactory: (
     monitor: BusHealthMonitor,
-    exchange: BinanceWebSocketAdapter,
+    exchange: ExchangeGateway,
     flush: FlushBufferUseCase,
   ): HealthMonitorUseCase =>
     new HealthMonitorUseCase(monitor, exchange, flush, {

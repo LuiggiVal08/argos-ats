@@ -1,13 +1,18 @@
 import { Controller, Get, Inject } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { BUS } from "../config/tokens"
+import { BUS, EXCHANGE_GATEWAY } from "../config/tokens"
 import { RedisProtocolBus } from "../messaging/redis-protocol-bus"
+import { ExchangeGateway } from "../../application/ports/exchange-gateway.port"
+
+const STALE_TICK_MS = 10_000
 
 @Controller("health")
 export class HealthController {
   constructor(
     private readonly config: ConfigService,
     @Inject(BUS) private readonly bus: RedisProtocolBus,
+    @Inject(EXCHANGE_GATEWAY)
+    private readonly exchange: ExchangeGateway,
   ) {}
 
   @Get()
@@ -22,5 +27,20 @@ export class HealthController {
       mode: this.config.get<string>("ENVIRONMENT_MODE", "PAPER_TRADING"),
       broker: brokerOk,
     }
+  }
+
+  @Get("exchange")
+  exchangeHealth(): {
+    state: string
+    connected: boolean
+    lastTickAgeMs: number | null
+    stale: boolean
+  } {
+    const state = this.exchange.state()
+    const connected = state === "open"
+    const lastTickAgeMs = this.exchange.lastTickAgeMs
+    const stale =
+      connected && lastTickAgeMs !== null && lastTickAgeMs > STALE_TICK_MS
+    return { state, connected, lastTickAgeMs, stale }
   }
 }

@@ -57,7 +57,7 @@ export class NotificationConsumer implements OnModuleInit, OnModuleDestroy {
   private async start(url: string): Promise<void> {
     this.sub = new Redis(url)
     log(`[notif] consumer started on stream=${STREAM}`)
-    const lastId = "$"
+    let lastId = "$"
 
     while (!this.stopped) {
       try {
@@ -79,7 +79,7 @@ export class NotificationConsumer implements OnModuleInit, OnModuleDestroy {
 
         for (const [, entries] of res) {
           for (const [id, fields] of entries) {
-            ;(lastId as unknown) = id
+            (lastId as unknown) = id
             const idx = fields.indexOf("p")
             if (idx === -1) continue
             const raw = fields[idx + 1]
@@ -94,6 +94,7 @@ export class NotificationConsumer implements OnModuleInit, OnModuleDestroy {
         }
       } catch (e) {
         if (this.stopped) return
+        log(`[notif] xread error: ${String(e)}`)
         await new Promise<void>((r) => setTimeout(r, 100))
       }
     }

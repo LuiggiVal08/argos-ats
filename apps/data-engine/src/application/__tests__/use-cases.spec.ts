@@ -63,6 +63,7 @@ class FakeBuffer implements TickBuffer {
 
 class FakeGateway implements ExchangeGateway {
   stateValue: ExchangeConnectionState = "idle"
+  lastTickAgeMs: number | null = null
   async start(_: (t: Tick) => Promise<void>): Promise<void> {
     this.stateValue = "open"
   }

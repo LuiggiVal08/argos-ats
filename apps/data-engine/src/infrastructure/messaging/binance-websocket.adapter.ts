@@ -10,52 +10,41 @@ import {
 } from "./in-memory-tick-buffer"
 
 export interface BinanceWebSocketAdapterOptions {
-  /**
-   * Binance combined-stream URL. For `btcusdt` trade stream:
-   *   wss://stream.binance.com:9443/stream?streams=btcusdt@trade
-   * Default points to the public mainnet endpoint.
-   */
   url?: string
-  /** Ping interval (ms) to keep the connection alive. Default 30000. */
   pingIntervalMs?: number
-  /** Reconnect delay (ms) on unexpected close. Default 1000. */
-  reconnectDelayMs?: number
-  /** Optional logger; if absent, falls back to console. */
+  reconnectBaseMs?: number
+  reconnectMaxMs?: number
+  maxReconnectAttempts?: number | null
   logger?: (msg: string) => void
 }
 
 const DEFAULT_URL =
   "wss://stream.binance.com:9443/stream?streams=btcusdt@trade"
 
-/**
- * ExchangeGateway adapter for Binance public market data.
- *
- * Subscribes to one or more combined streams using the
- * `wss://stream.binance.com:9443/stream?streams=...` endpoint and
- * invokes the onTick handler for every trade event.
- *
- * No auth, no trading. Read-only public market data.
- *
- * Lifecycle:
- *  - start(): open WS, begin receiving events.
- *  - close(): orderly close (close frame 1000), no reconnect.
- *  - state(): snapshot of the connection state.
- *
- * The 10s sad-path cutoff is NOT enforced here — that's
- * HealthMonitorUseCase's responsibility, which calls exchange.close().
- */
+const MAX_BACKOFF = 30_000
+const BASE_BACKOFF = 1_000
+
 export class BinanceWebSocketAdapter implements ExchangeGateway {
   private ws: WebSocket | null = null
   private connState: ExchangeConnectionState = "idle"
   private pingTimer: NodeJS.Timeout | null = null
+  private reconnectTimer: NodeJS.Timeout | null = null
+  private reconnectAttempt = 0
+  private intentionalClose = false
+  private onTickHandler: ((tick: Tick) => Promise<void>) | null = null
+  private lastTickTs: number | null = null
   private readonly log: (msg: string) => void
-  private readonly opts: Required<Omit<BinanceWebSocketAdapterOptions, "logger">>
+  private readonly opts: Required<
+    Omit<BinanceWebSocketAdapterOptions, "logger">
+  >
 
   constructor(opts: BinanceWebSocketAdapterOptions = {}) {
     this.opts = {
       url: opts.url ?? DEFAULT_URL,
       pingIntervalMs: opts.pingIntervalMs ?? 30000,
-      reconnectDelayMs: opts.reconnectDelayMs ?? 1000,
+      reconnectBaseMs: opts.reconnectBaseMs ?? BASE_BACKOFF,
+      reconnectMaxMs: opts.reconnectMaxMs ?? MAX_BACKOFF,
+      maxReconnectAttempts: opts.maxReconnectAttempts ?? null,
     }
     this.log =
       opts.logger ??
@@ -63,11 +52,19 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       ((m) => console.log(`[binance-ws] ${m}`))
   }
 
+  get lastTickAgeMs(): number | null {
+    if (this.lastTickTs === null) return null
+    return Date.now() - this.lastTickTs
+  }
+
   async start(onTick: (tick: Tick) => Promise<void>): Promise<void> {
     if (this.connState === "open" || this.connState === "connecting") {
       this.log(`start() ignored — already ${this.connState}`)
       return
     }
+    this.intentionalClose = false
+    this.reconnectAttempt = 0
+    this.onTickHandler = onTick
     this.connState = "connecting"
     await this.open(onTick)
   }
@@ -78,6 +75,7 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       this.ws = ws
       ws.once("open", () => {
         this.connState = "open"
+        this.reconnectAttempt = 0
         this.log("connection open")
         this.pingTimer = setInterval(
           () => ws.ping(),
@@ -97,6 +95,7 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
           }
           const trade = msg.data
           if (!trade || trade.e !== "trade") return
+          this.lastTickTs = Date.now()
           const tick = tickFromBinanceTrade(trade)
           void onTick(tick)
         } catch (e) {
@@ -111,12 +110,54 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
           this.pingTimer = null
         }
         this.ws = null
+        if (!this.intentionalClose) {
+          this.scheduleReconnect()
+        }
       })
     })
   }
 
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) return
+
+    const maxAttempts = this.opts.maxReconnectAttempts
+    if (maxAttempts !== null && this.reconnectAttempt >= maxAttempts) {
+      this.log(
+        `max reconnect attempts (${maxAttempts}) reached — giving up`,
+      )
+      return
+    }
+
+    const delay = Math.min(
+      this.opts.reconnectBaseMs * Math.pow(2, this.reconnectAttempt),
+      this.opts.reconnectMaxMs,
+    )
+    this.reconnectAttempt++
+    this.log(
+      `scheduling reconnect #${this.reconnectAttempt} in ${delay}ms`,
+    )
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (this.intentionalClose) return
+      this.log(`reconnecting...`)
+      this.connState = "connecting"
+      if (this.onTickHandler) {
+        void this.open(this.onTickHandler).catch((err) => {
+          this.log(`reconnect failed: ${err.message}`)
+          this.scheduleReconnect()
+        })
+      }
+    }, delay)
+  }
+
   async close(): Promise<void> {
     if (this.connState === "closed" || this.connState === "idle") return
+    this.intentionalClose = true
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     this.log("close() — sending close frame 1000")
     const ws = this.ws
     if (this.pingTimer) {
@@ -137,4 +178,5 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
   state(): ExchangeConnectionState {
     return this.connState
   }
+
 }
