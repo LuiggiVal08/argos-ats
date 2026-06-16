@@ -7,76 +7,90 @@
 # adjust the healthcheck. Application code reads ARGOS_BROKER_URL
 # and is broker-agnostic.
 services:
-  data-engine:
-    build: ./apps/data-engine
-    container_name: argos-data-engine
-    environment:
-      - ENVIRONMENT_MODE=${ENVIRONMENT_MODE:-PAPER_TRADING}
-      - ARGOS_BROKER_URL=redis://broker:6379
-      - EXCHANGE_WS_URL=${EXCHANGE_WS_URL:-wss://stream.binance.com:9443/ws}
-    env_file:
-      - .env
-    depends_on:
-      broker:
-        condition: service_healthy
-    networks: [argos-net]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
+    data-engine:
+        build: ./apps/data-engine
+        container_name: argos-data-engine
+        ports:
+            - '3000:3000'
+        environment:
+            - ENVIRONMENT_MODE=${ENVIRONMENT_MODE:-PAPER_TRADING}
+            - ARGOS_BROKER_URL=redis://broker:6379
+            - EXCHANGE_WS_URL=${EXCHANGE_WS_URL:-wss://stream.binance.com:9443/ws}
+            - SYMBOL=${SYMBOL:-BTC/USDT}
+            - STREAM_PREFIX=${STREAM_PREFIX:-ticks:}
+        env_file:
+            - .env
+        depends_on:
+            broker:
+                condition: service_healthy
+        dns:
+            - 8.8.8.8
+            - 1.1.1.1
+        networks: [argos-net]
+        restart: unless-stopped
+        healthcheck:
+            test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
+        logging:
+            driver: json-file
+            options: { max-size: '10m', max-file: '3' }
 
-  analytics-engine:
-    build: ./apps/analytics-engine
-    container_name: argos-analytics-engine
-    environment:
-      - ENVIRONMENT_MODE=${ENVIRONMENT_MODE:-PAPER_TRADING}
-      - ARGOS_BROKER_URL=redis://broker:6379
-      - RISK_PCT=${RISK_PCT:-0.01}
-      - DRAWDOWN_PCT=${DRAWDOWN_PCT:-0.05}
-    env_file:
-      - .env
-    depends_on:
-      broker:
-        condition: service_healthy
-    networks: [argos-net]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
+    analytics-engine:
+        build: ./apps/analytics-engine
+        container_name: argos-analytics-engine
+        ports:
+            - '8000:8000'
+        environment:
+            - ENVIRONMENT_MODE=${ENVIRONMENT_MODE:-PAPER_TRADING}
+            - ARGOS_BROKER_URL=redis://broker:6379
+            - SYMBOL=${SYMBOL:-BTC/USDT}
+            - USE_PYTORCH=${USE_PYTORCH:-false}
+            - RISK_PCT=${RISK_PCT:-0.01}
+            - DRAWDOWN_PCT=${DRAWDOWN_PCT:-0.05}
+        env_file:
+            - .env
+        depends_on:
+            broker:
+                condition: service_healthy
+        networks: [argos-net]
+        restart: unless-stopped
+        healthcheck:
+            test:
+                ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
+        logging:
+            driver: json-file
+            options: { max-size: '10m', max-file: '3' }
 
-  # RESP-compatible broker. Swap image to use another implementation.
-  # Examples: redis:7-alpine | valkey/valkey:7-alpine | dhrdldh3/dragonfly |
-  #           eqalpha/keydb | ghcr.io/microsoft/garnet
-  broker:
-    image: redis:7-alpine
-    container_name: argos-broker
-    command: ["redis-server", "--appendonly", "yes"]
-    networks: [argos-net]
-    volumes:
-      - broker-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
+    # RESP-compatible broker. Swap image to use another implementation.
+    # Examples: redis:7-alpine | valkey/valkey:7-alpine | dhrdldh3/dragonfly |
+    #           eqalpha/keydb | ghcr.io/microsoft/garnet
+    broker:
+        image: redis:7-alpine
+        container_name: argos-broker
+        ports:
+            - '6379:6379'
+        command: ['redis-server', '--appendonly', 'yes']
+        networks: [argos-net]
+        volumes:
+            - broker-data:/data
+        restart: unless-stopped
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 10s
+            timeout: 3s
+            retries: 3
+            start_period: 5s
 
 networks:
-  argos-net:
-    driver: bridge
+    argos-net:
+        driver: bridge
 
 volumes:
-  broker-data:
+    broker-data:

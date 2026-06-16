@@ -30,8 +30,14 @@ class CheckpointRepository(Protocol):
         self,
         model: NovaQuantModel,
         weights_bytes: bytes,
+        symbol: str = "",
     ) -> str:
         """Persiste el modelo + pesos.
+
+        Args:
+            model: modelo entrenado.
+            weights_bytes: pesos serializados.
+            symbol: trading pair (opcional, para multi-symbol).
 
         Returns:
             Ruta o identificador del checkpoint guardado.
@@ -40,8 +46,13 @@ class CheckpointRepository(Protocol):
         """
         ...
 
-    async def load_latest(self) -> tuple[NovaQuantModel, bytes]:
+    async def load_latest(
+        self, symbol: str = "",
+    ) -> tuple[NovaQuantModel, bytes]:
         """Carga el checkpoint mas reciente.
+
+        Args:
+            symbol: trading pair (opcional, multi-symbol).
 
         Returns:
             (NovaQuantModel, weights_bytes).
@@ -52,14 +63,22 @@ class CheckpointRepository(Protocol):
         ...
 
     async def load_version(
-        self, model_version: str
+        self, model_version: str, symbol: str = "",
     ) -> tuple[NovaQuantModel, bytes]:
         """Carga un checkpoint por version.
+
+        Args:
+            model_version: version del modelo.
+            symbol: trading pair (opcional, multi-symbol).
 
         Raises CheckpointNotFoundError si no existe esa version.
         """
         ...
 
-    async def list_versions(self) -> list[str]:
-        """Lista versiones disponibles ordenadas descendente."""
+    async def list_versions(self, symbol: str = "") -> list[str]:
+        """Lista versiones disponibles ordenadas descendente.
+
+        Args:
+            symbol: trading pair (opcional, multi-symbol).
+        """
         ...

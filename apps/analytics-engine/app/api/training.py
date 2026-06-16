@@ -16,6 +16,10 @@ from ..application.use_cases.run_walk_forward import RunWalkForwardUseCase
 from ..application.use_cases.compute_feature_importance import (
     ComputeFeatureImportanceUseCase,
 )
+from ..application.use_cases.ensemble_training import (
+    EnsembleTrainingError,
+    EnsembleTrainingUseCase,
+)
 from ..composition import (
     get_register_model_usecase,
     get_promote_model_usecase,
@@ -26,6 +30,7 @@ from ..composition import (
     get_list_shadows_usecase,
     get_walk_forward_usecase,
     get_feature_importance_usecase,
+    get_ensemble_training_usecase,
 )
 
 router = APIRouter(prefix="/training", tags=["training"])
@@ -163,4 +168,40 @@ async def feature_importance(
         "importance": result.importance,
         "total_features": result.total_features,
         "top_features": result.top_features,
+    }
+
+
+@router.post(
+    "/train-ensemble",
+    summary="Train full ensemble (LSTM + XGBoost + MetaModel) with Walk Forward.",
+)
+async def train_ensemble(
+    request: Request,
+    symbol: str = "BTC/USDT",
+    timeframe: str = "1h",
+    limit: int = 10000,
+) -> dict:
+    uc: EnsembleTrainingUseCase = get_ensemble_training_usecase(request)
+    try:
+        result = await uc.execute(
+            symbol=symbol,
+            timeframe=timeframe,
+            limit=limit,
+        )
+    except EnsembleTrainingError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    return {
+        "status": "ok",
+        "lstm_version": result.lstm_version,
+        "xgb_version": result.xgb_version,
+        "meta_version": result.meta_version,
+        "calibrator_version": result.calibrator_version,
+        "n_windows": result.n_windows,
+        "windows_passed": result.windows_passed,
+        "avg_val_accuracy": result.avg_val_accuracy,
+        "avg_val_loss": result.avg_val_loss,
+        "oof_size": result.oof_size,
+        "n_features": result.n_features,
+        "meta_train_accuracy": result.meta_train_accuracy,
     }

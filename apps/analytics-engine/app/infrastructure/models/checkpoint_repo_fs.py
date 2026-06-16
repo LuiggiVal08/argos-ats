@@ -52,19 +52,22 @@ class FsCheckpointRepository:
         self,
         model: NovaQuantModel,
         weights_bytes: bytes,
+        symbol: str = "",
     ) -> str:
         """Persiste el modelo + pesos en disco.
 
         Args:
             model: entidad NovaQuantModel con metadatos.
             weights_bytes: pesos serializados del modelo Keras.
+            symbol: trading pair (ej BTC/USDT) para multi-symbol.
 
         Returns:
             Ruta del directorio del checkpoint.
 
         Raises CheckpointIOError si falla la escritura.
         """
-        version_dir = self._base / model.model_version
+        base = self._base / _symbol_dir(symbol) if symbol else self._base
+        version_dir = base / model.model_version
         try:
             version_dir.mkdir(parents=True, exist_ok=True)
 
@@ -85,7 +88,8 @@ class FsCheckpointRepository:
             weights_path.write_bytes(weights_bytes)
 
             # Actualizar symlink latest
-            latest_link = self._base / "latest"
+            latest_base = self._base / _symbol_dir(symbol) if symbol else self._base
+            latest_link = latest_base / "latest"
             if latest_link.exists() or latest_link.is_symlink():
                 latest_link.unlink()
             latest_link.symlink_to(version_dir.name)
@@ -97,52 +101,68 @@ class FsCheckpointRepository:
                 f"failed to save checkpoint {model.model_version}: {e}"
             ) from e
 
-    async def load_latest(self) -> tuple[NovaQuantModel, bytes]:
+    async def load_latest(
+        self, symbol: str = "",
+    ) -> tuple[NovaQuantModel, bytes]:
         """Carga el checkpoint mas reciente.
+
+        Args:
+            symbol: trading pair (ej BTC/USDT) para multi-symbol.
 
         Returns:
             (NovaQuantModel, weights_bytes).
 
         Raises CheckpointNotFoundError si no hay ninguno.
         """
+        base = self._base / _symbol_dir(symbol) if symbol else self._base
         # Intentar symlink latest
-        latest_link = self._base / "latest"
+        latest_link = base / "latest"
         if latest_link.exists():
             version_dir = latest_link.resolve()
         else:
             # Buscar el directorio mas reciente por nombre de version
             versions = sorted(
-                [d for d in self._base.iterdir() if d.is_dir() and d.name != "latest"],
+                [d for d in base.iterdir() if d.is_dir() and d.name != "latest"],
                 reverse=True,
             )
             if not versions:
                 raise CheckpointNotFoundError(
-                    f"no checkpoints found in {self._base}"
+                    f"no checkpoints found in {base}"
                 )
             version_dir = versions[0]
 
         return await self._load_from_dir(version_dir)
 
     async def load_version(
-        self, model_version: str
+        self, model_version: str, symbol: str = "",
     ) -> tuple[NovaQuantModel, bytes]:
         """Carga un checkpoint por version.
 
+        Args:
+            model_version: version del modelo.
+            symbol: trading pair (ej BTC/USDT) para multi-symbol.
+
         Raises CheckpointNotFoundError si no existe esa version.
         """
-        version_dir = self._base / model_version
+        base = self._base / _symbol_dir(symbol) if symbol else self._base
+        version_dir = base / model_version
         if not version_dir.exists():
             raise CheckpointNotFoundError(
-                f"checkpoint version {model_version} not found in {self._base}"
+                f"checkpoint version {model_version} not found in {base}"
             )
         return await self._load_from_dir(version_dir)
 
-    async def list_versions(self) -> list[str]:
-        """Lista versiones disponibles ordenadas descendente."""
+    async def list_versions(self, symbol: str = "") -> list[str]:
+        """Lista versiones disponibles ordenadas descendente.
+
+        Args:
+            symbol: trading pair (ej BTC/USDT) para multi-symbol.
+        """
+        base = self._base / _symbol_dir(symbol) if symbol else self._base
         versions = sorted(
             [
                 d.name
-                for d in self._base.iterdir()
+                for d in base.iterdir()
                 if d.is_dir() and d.name != "latest"
             ],
             reverse=True,
@@ -228,6 +248,11 @@ def _dict_to_config(data: dict[str, Any]) -> ModelConfig:
         max_epochs=data["max_epochs"],
         early_stop_patience=data["early_stop_patience"],
     )
+
+
+def _symbol_dir(symbol: str) -> Path:
+    """Convierte BTC/USDT → BTC_USDT para nombres de directorio."""
+    return Path(symbol.replace("/", "_"))
 
 
 def _metadata_to_dict(model: NovaQuantModel) -> dict[str, Any]:

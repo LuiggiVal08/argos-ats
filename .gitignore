@@ -59,5 +59,16 @@ build/
 .opencode/.client.lock
 .opencode/.gitignore
 
+# Data / training artifacts (regenerated on export)
+data/
+!apps/analytics-engine/app/infrastructure/data/
+checkpoints/
+reports/
+*.zip
+*.npy
+*.h5
+*.hdf5
+*.parquet
+
 # AI tooling generated (rebuild locally on clone)
 # skills-lock.json is committed (it's a lockfile, like package-lock.json)

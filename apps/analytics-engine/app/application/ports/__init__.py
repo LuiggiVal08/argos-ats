@@ -41,6 +41,7 @@ from .regime_detector import RegimeDetector, RegimeDetectionError
 from .signal_consumer import SignalConsumer
 from .strategy import Strategy, StrategyRegistry
 from .uncertainty_estimator import UncertaintyEstimator
+from .validation_reporter import ValidationReporter
 
 __all__ = [
     "AnalysisError",
@@ -85,4 +86,5 @@ __all__ = [
     "StrategyRegistry",
     "TrainingError",
     "UncertaintyEstimator",
+    "ValidationReporter",
 ]

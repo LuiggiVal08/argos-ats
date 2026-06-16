@@ -3,26 +3,22 @@ import { StreamName } from "../../domain/value-objects/stream-name"
 import { MessageBus } from "../ports/message-bus.port"
 import { TickBuffer } from "../ports/tick-buffer.port"
 
-/**
- * Happy path: try to publish to the broker; on failure, fall back to
- * the in-memory buffer. The application never blocks the data-engine's
- * WebSocket reception on broker latency (spec §5 Historia 1).
- */
 export class IngestTickUseCase {
   constructor(
     private readonly bus: MessageBus,
     private readonly buffer: TickBuffer,
-    private readonly stream: StreamName,
+    private readonly defaultStream: StreamName,
   ) {}
 
-  async execute(tick: Tick): Promise<{ published: boolean; buffered: boolean }> {
+  async execute(
+    tick: Tick,
+    stream?: StreamName,
+  ): Promise<{ published: boolean; buffered: boolean }> {
+    const target = stream ?? this.defaultStream
     try {
-      await this.bus.publish(this.stream, tick)
+      await this.bus.publish(target, tick)
       return { published: true, buffered: false }
     } catch {
-      // Spec: NestJS intercepts the failure in its infrastructure layer
-      // and stores ticks in a buffer. We abstract the broker failure
-      // here as a port-level error and route to the buffer.
       await this.buffer.push(tick)
       return { published: false, buffered: true }
     }

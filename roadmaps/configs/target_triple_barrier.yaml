@@ -1,0 +1,51 @@
+name: "target-triple-barrier"
+version: "0.1.0"
+description: "Triple Barrier labeling con ATR dinámico. Baseline actual."
+
+data:
+  symbols: ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+  timeframe: "1h"
+  start: "2020-01-01"
+  end: "2026-06-01"
+
+target:
+  method: "triple_barrier"
+  params:
+    lookahead: 5
+    atr_multiplier: 1.5
+  classes: ["BUY", "SELL", "HOLD"]
+
+features:
+  groups: ["ohlcv", "ta"]
+  lookback: 20
+  list:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - rsi
+    - ema_fast
+    - ema_medium
+    - ema_slow
+    - macd
+    - macd_signal
+    - macd_hist
+    - bb_upper
+    - bb_middle
+    - bb_lower
+    - atr
+    - adx
+    - obv
+    - volume_sma
+    - pct_change
+
+model:
+  type: "lstm"
+  params:
+    layers: [128, 64, 32, 16]
+    dropout: 0.2
+
+evaluation:
+  metrics: ["f1_macro", "kappa", "mcc", "balanced_accuracy", "shuffle_diff"]
+  gates: ["g0_no_alpha", "g1_signal_existence"]

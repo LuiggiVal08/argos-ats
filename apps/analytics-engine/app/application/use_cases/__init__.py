@@ -4,16 +4,22 @@ from .check_drawdown import (
     CheckDrawdownError,
     CheckDrawdownResult,
 )
-from .execute_signal import ExecuteSignalUseCase, ExecuteSignalError, ExecuteSignalResult
-from .execute_trading_signal import (
-    ExecuteTradingSignalUseCase,
-    ExecuteSignalResult as ExecuteTradingSignalResult,
+from .ensemble_training import (
+    EnsembleTrainingUseCase,
+    EnsembleTrainingResult,
+    EnsembleTrainingError,
 )
+from .execute_signal import ExecuteSignalUseCase, ExecuteSignalError, ExecuteSignalResult
 from .list_incidents import ListIncidentsUseCase
 from .monitor_positions import MonitorPositionsUseCase, MonitorPositionsError, MonitorResult
 from .notify_on_event import NotifyOnEventUseCase
 from .open_day import OpenDayUseCase, OpenDayError
 from .place_order import PlaceOrderUseCase, PlaceOrderError, PlaceOrderResult
+from .predict_ensemble import (
+    PredictEnsembleError,
+    PredictEnsembleResult,
+    PredictEnsembleSignalUseCase,
+)
 from .predict_signal import (
     ConfirmIndicatorsResult,
     PredictSignalError,
@@ -42,11 +48,12 @@ __all__ = [
     "CheckDrawdownError",
     "CheckDrawdownResult",
     "ConfirmIndicatorsResult",
+    "EnsembleTrainingError",
+    "EnsembleTrainingResult",
+    "EnsembleTrainingUseCase",
     "ExecuteSignalError",
     "ExecuteSignalResult",
     "ExecuteSignalUseCase",
-    "ExecuteTradingSignalResult",
-    "ExecuteTradingSignalUseCase",
     "ListIncidentsUseCase",
     "MonitorPositionsError",
     "MonitorPositionsUseCase",
@@ -57,6 +64,9 @@ __all__ = [
     "PlaceOrderUseCase",
     "PlaceOrderError",
     "PlaceOrderResult",
+    "PredictEnsembleError",
+    "PredictEnsembleResult",
+    "PredictEnsembleSignalUseCase",
     "PredictSignalError",
     "PredictSignalResult",
     "PredictSignalUseCase",

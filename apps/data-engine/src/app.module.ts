@@ -7,6 +7,7 @@ import {
   EXCHANGE_GATEWAY,
   HEALTH_MONITOR,
   STREAM_NAME,
+  SYMBOLS,
   TICK_BUFFER,
   CANDLE_STORE,
   CANDLE_PUBLISHER,
@@ -15,14 +16,18 @@ import {
   EVENT_STORE,
 } from "./infrastructure/config/tokens"
 import { RedisProtocolBus } from "./infrastructure/messaging/redis-protocol-bus"
-import { BinanceWebSocketAdapter } from "./infrastructure/messaging/binance-websocket.adapter"
+import {
+  createExchangeAdapter,
+  parseSymbols,
+} from "./infrastructure/messaging/exchange-adapter.factory"
 import { InMemoryTickBuffer } from "./infrastructure/messaging/in-memory-tick-buffer"
 import { BusHealthMonitor } from "./infrastructure/messaging/bus-health-monitor"
 import { InMemoryCandleStore } from "./infrastructure/messaging/in-memory-candle-store"
 import { RedisCandlePublisher } from "./infrastructure/messaging/redis-candle-publisher"
-import { Symbol } from "./domain/value-objects/symbol"
+import { Symbol as SymbolVo } from "./domain/value-objects/symbol"
 import { StreamName } from "./domain/value-objects/stream-name"
 import { IngestTickUseCase } from "./application/use-cases/ingest-tick.usecase"
+import { IngestAdditionalDataUseCase } from "./application/use-cases/ingest-additional-data.usecase"
 import { BufferTickUseCase } from "./application/use-cases/buffer-tick.usecase"
 import { FlushBufferUseCase } from "./application/use-cases/flush-buffer.usecase"
 import { HealthMonitorUseCase } from "./application/use-cases/health-monitor.usecase"
@@ -35,6 +40,7 @@ import { FeaturePipelineService } from "./infrastructure/services/feature-pipeli
 import { TechnicalIndicatorCalculator } from "./infrastructure/indicators/technical-indicator-calculator"
 import { RedisFeaturePublisher } from "./infrastructure/messaging/redis-feature-publisher"
 import { EventStore } from "./application/ports/event-store.port"
+import { ExchangeGateway } from "./application/ports/exchange-gateway.port"
 import { FileEventStore } from "./infrastructure/storage/file-event-store"
 import { HistoricalPipelineService } from "./infrastructure/services/historical-pipeline.service"
 import { ReplayMarketUseCase } from "./application/use-cases/replay-market.usecase"
@@ -44,12 +50,20 @@ const log = (m: string): void => {
   console.log(m)
 }
 
+const symbolsProvider: Provider = {
+  provide: SYMBOLS,
+  useFactory: (): SymbolVo[] => {
+    const envVal = process.env.SYMBOL
+    return envVal ? parseSymbols(envVal) : [SymbolVo.parse("BTC/USDT")]
+  },
+}
+
 const streamNameProvider: Provider = {
   provide: STREAM_NAME,
-  useFactory: (): StreamName => {
-    const symbol = process.env.SYMBOL ?? "BTC/USDT"
+  inject: [SYMBOLS],
+  useFactory: (symbols: SymbolVo[]): StreamName => {
     const prefix = process.env.STREAM_PREFIX ?? "ticks:"
-    return StreamName.forTicks(Symbol.parse(symbol), prefix)
+    return StreamName.forTicks(symbols[0], prefix)
   },
 }
 
@@ -76,8 +90,8 @@ const tickBufferProvider: Provider = {
 
 const exchangeProvider: Provider = {
   provide: EXCHANGE_GATEWAY,
-  useFactory: (): BinanceWebSocketAdapter =>
-    new BinanceWebSocketAdapter({ logger: log }),
+  useFactory: (): ExchangeGateway =>
+    createExchangeAdapter(log, true),
 }
 
 const healthMonitorProvider: Provider = {
@@ -106,12 +120,14 @@ const bufferUseCaseProvider: Provider = {
 
 const flushProvider: Provider = {
   provide: FlushBufferUseCase,
-  inject: [BUS, TICK_BUFFER, STREAM_NAME],
+  inject: [BUS, TICK_BUFFER],
   useFactory: (
     bus: RedisProtocolBus,
     buffer: InMemoryTickBuffer,
-    stream: StreamName,
-  ): FlushBufferUseCase => new FlushBufferUseCase(bus, buffer, stream),
+  ): FlushBufferUseCase => {
+    const prefix = process.env.STREAM_PREFIX ?? "ticks:"
+    return new FlushBufferUseCase(bus, buffer, prefix)
+  },
 }
 
 const healthMonitorUseCaseProvider: Provider = {
@@ -119,7 +135,7 @@ const healthMonitorUseCaseProvider: Provider = {
   inject: [HEALTH_MONITOR, EXCHANGE_GATEWAY, FlushBufferUseCase],
   useFactory: (
     monitor: BusHealthMonitor,
-    exchange: BinanceWebSocketAdapter,
+    exchange: ExchangeGateway,
     flush: FlushBufferUseCase,
   ): HealthMonitorUseCase =>
     new HealthMonitorUseCase(monitor, exchange, flush, {
@@ -196,10 +212,18 @@ const replayProvider: Provider = {
   ): ReplayMarketUseCase => new ReplayMarketUseCase(store, bus),
 }
 
+const ingestAdditionalProvider: Provider = {
+  provide: IngestAdditionalDataUseCase,
+  inject: [BUS],
+  useFactory: (bus: RedisProtocolBus): IngestAdditionalDataUseCase =>
+    new IngestAdditionalDataUseCase(bus),
+}
+
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
   controllers: [HealthController, HealthControllerBus],
   providers: [
+    symbolsProvider,
     streamNameProvider,
     busProvider,
     tickBufferProvider,
@@ -217,6 +241,7 @@ const replayProvider: Provider = {
     calculateFeaturesProvider,
     eventStoreProvider,
     replayProvider,
+    ingestAdditionalProvider,
     TickPipelineService,
     CandlePipelineService,
     FeaturePipelineService,

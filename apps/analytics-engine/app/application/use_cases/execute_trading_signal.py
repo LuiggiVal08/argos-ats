@@ -1,6 +1,12 @@
-"""ExecuteTradingSignalUseCase — simplified execution for NovaQuant signals.
+"""DEPRECATED — ExecuteTradingSignalUseCase.
 
-Pipeline:
+WARNING: This use case bypasses CircuitBreaker, RiskEngine, and
+PortfolioManager invariants. It is kept for reference only and
+must NOT be wired into the API or composition root.
+
+Use ExecutionEngine or ExecuteSignalUseCase instead.
+
+Pipeline (for reference):
   1. If signal.side is HOLD → log rejection, return skipped (no error)
   2. If not BUY or confidence < threshold → log rejection, return skipped
   3. Fetch current ATR for the symbol
@@ -9,12 +15,6 @@ Pipeline:
   6. Persist LivePosition
   7. Log execution via ExecutionLogger
   8. Return ExecuteSignalResult
-
-Diff vs the existing ExecuteSignalUseCase (which takes ExecutionSignal):
-  - Input is TradingSignal (raw model output, no symbol/price pre-filled)
-  - No signal validator, no circuit-breaker check, no balance provider
-  - Simpler: just BUY/HOLD + confidence threshold
-  - Dedicated SL(2×ATR)/TP(3.5×ATR) for BUY-only
 """
 from __future__ import annotations
 

@@ -30,6 +30,9 @@ class FakeBus implements MessageBus {
     if (this.failPublish) throw new Error("broker-down")
     this.published.push(t)
   }
+  async publishRaw(_s: StreamName, _d: Record<string, unknown>): Promise<void> {
+    // no-op for additional data tests
+  }
   async subscribe(
     _s: StreamName,
     h: (t: Tick) => Promise<void>,
@@ -63,6 +66,7 @@ class FakeBuffer implements TickBuffer {
 
 class FakeGateway implements ExchangeGateway {
   stateValue: ExchangeConnectionState = "idle"
+  lastTickAgeMs: number | null = null
   async start(_: (t: Tick) => Promise<void>): Promise<void> {
     this.stateValue = "open"
   }
@@ -71,6 +75,9 @@ class FakeGateway implements ExchangeGateway {
   }
   state(): ExchangeConnectionState {
     return this.stateValue
+  }
+  exchangeInfo() {
+    return { reconnectAttempt: 0, totalReconnects: 0, connectedAt: null }
   }
 }
 
@@ -124,8 +131,7 @@ describe("FlushBufferUseCase", () => {
   it("drains and publishes everything when broker is up", async () => {
     const bus = new FakeBus()
     const buf = new FakeBuffer()
-    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
-    const uc = new FlushBufferUseCase(bus, buf, stream)
+    const uc = new FlushBufferUseCase(bus, buf, "ticks:")
     await buf.push(makeTick(1))
     await buf.push(makeTick(2))
     const r = await uc.execute()
@@ -138,12 +144,11 @@ describe("FlushBufferUseCase", () => {
   it("stops flushing on first broker error (preserves remaining)", async () => {
     const bus = new FakeBus()
     const buf = new FakeBuffer()
-    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
     await buf.push(makeTick(1))
     await buf.push(makeTick(2))
     await buf.push(makeTick(3))
     bus.failPublish = true
-    const uc = new FlushBufferUseCase(bus, buf, stream)
+    const uc = new FlushBufferUseCase(bus, buf, "ticks:")
     const r = await uc.execute()
     expect(r.drained).toBe(3)
     expect(r.published).toBe(0)
@@ -161,8 +166,7 @@ describe("HealthMonitorUseCase", () => {
     const exchange = new FakeGateway()
     const bus = new FakeBus()
     const buf = new FakeBuffer()
-    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
-    const flush = new FlushBufferUseCase(bus, buf, stream)
+    const flush = new FlushBufferUseCase(bus, buf, "ticks:")
     const log: string[] = []
     const uc = new HealthMonitorUseCase(monitor, exchange, flush, {
       cutoffMs: 10_000,
@@ -186,8 +190,7 @@ describe("HealthMonitorUseCase", () => {
     const exchange = new FakeGateway()
     const bus = new FakeBus()
     const buf = new FakeBuffer()
-    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
-    const flush = new FlushBufferUseCase(bus, buf, stream)
+    const flush = new FlushBufferUseCase(bus, buf, "ticks:")
     const log: string[] = []
     const uc = new HealthMonitorUseCase(monitor, exchange, flush, {
       cutoffMs: 10_000,

@@ -1,0 +1,4 @@
+regime,n_signals,win_rate,profit_factor,avg_confidence,avg_uncertainty
+RANGING,42505,1.0,inf,0.9516,0.0
+TRENDING,35874,0.9991,1120.0625,0.9297,0.0
+VOLATILE,5715,0.9925,131.907,0.9491,0.0

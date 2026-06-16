@@ -1,0 +1,240 @@
+{
+  "symbol": "AVAX/USDT",
+  "model_version": "v1.0.1781441834",
+  "trained_at": "2026-06-14T12:57:14.968185+00:00",
+  "validated_at": "2026-06-15T01:04:42.593402+00:00",
+  "status": "FAIL",
+  "n_test_samples": 84094,
+  "n_features": 20,
+  "lookback": 60,
+  "n_windows": 1,
+  "critical_failures": [
+    "class_distribution: HOLD dominates 100%",
+    "confusion_matrix: Avg F1=0.000"
+  ],
+  "warnings": [
+    "feature_importance: Zero importance: lstm_buy, lstm_sell, lstm_hold, xgb_buy, xgb_sell, xgb_hold, adx, bbw, atr, rsi, volume",
+    "mc_dropout: Uncertainty data not available"
+  ],
+  "checks": [
+    {
+      "check_type": "class_distribution",
+      "status": "FAIL",
+      "metrics": {
+        "distribution": {
+          "counts": {
+            "BUY": 0,
+            "SELL": 0,
+            "HOLD": 84094
+          },
+          "percentages": {
+            "BUY": 0.0,
+            "SELL": 0.0,
+            "HOLD": 1.0
+          }
+        }
+      },
+      "message": "HOLD dominates 100%",
+      "details_path": null
+    },
+    {
+      "check_type": "confusion_matrix",
+      "status": "FAIL",
+      "metrics": {
+        "confusion": {
+          "matrix": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "labels": [
+            "BUY",
+            "SELL",
+            "HOLD"
+          ],
+          "precision": {
+            "BUY": 0.0,
+            "SELL": 0.0,
+            "HOLD": 0.0
+          },
+          "recall": {
+            "BUY": 0.0,
+            "SELL": 0.0,
+            "HOLD": 0.0
+          },
+          "f1": {
+            "BUY": 0.0,
+            "SELL": 0.0,
+            "HOLD": 0.0
+          },
+          "accuracy": 0.0
+        }
+      },
+      "message": "Avg F1=0.000",
+      "details_path": null
+    },
+    {
+      "check_type": "probability_histogram",
+      "status": "PASS",
+      "metrics": {
+        "mean_probabilities": [
+          0.029677876702820044,
+          0.029369521983461173,
+          0.9409526014583826
+        ],
+        "std_probabilities": [
+          0.060011221799148896,
+          0.032060037622009215,
+          0.08480397962210477
+        ]
+      },
+      "message": "Mean: [0.03  0.029 0.941], Std: [0.06  0.032 0.085]",
+      "details_path": null
+    },
+    {
+      "check_type": "calibration_curve",
+      "status": "ERROR",
+      "metrics": {
+        "calibration": {
+          "brier": {
+            "overall": 0.0,
+            "per_class": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "ece": {
+            "overall": 0.0,
+            "n_bins": 10
+          },
+          "n_bins": 10
+        }
+      },
+      "message": "scikit-learn not available",
+      "details_path": null
+    },
+    {
+      "check_type": "feature_importance",
+      "status": "WARNING",
+      "metrics": {
+        "feature_importance": {
+          "ranking": [
+            [
+              "lstm_buy",
+              0.0
+            ],
+            [
+              "lstm_sell",
+              0.0
+            ],
+            [
+              "lstm_hold",
+              0.0
+            ],
+            [
+              "xgb_buy",
+              0.0
+            ],
+            [
+              "xgb_sell",
+              0.0
+            ],
+            [
+              "xgb_hold",
+              0.0
+            ],
+            [
+              "adx",
+              0.0
+            ],
+            [
+              "bbw",
+              0.0
+            ],
+            [
+              "atr",
+              0.0
+            ],
+            [
+              "rsi",
+              0.0
+            ],
+            [
+              "volume",
+              0.0
+            ]
+          ],
+          "n_features": 11
+        }
+      },
+      "message": "Zero importance: lstm_buy, lstm_sell, lstm_hold, xgb_buy, xgb_sell, xgb_hold, adx, bbw, atr, rsi, volume",
+      "details_path": null
+    },
+    {
+      "check_type": "mc_dropout",
+      "status": "WARNING",
+      "metrics": {
+        "uncertainty": {
+          "mean_std": 0.0,
+          "median_std": 0.0,
+          "p95_std": 0.0,
+          "min_std": 0.0,
+          "max_std": 0.0,
+          "n_samples": 30
+        }
+      },
+      "message": "Uncertainty data not available",
+      "details_path": null
+    },
+    {
+      "check_type": "regime_breakdown",
+      "status": "PASS",
+      "metrics": {
+        "regime_breakdown": {
+          "regimes": [
+            {
+              "regime": "RANGING",
+              "n_signals": 45013,
+              "win_rate": 0.9958,
+              "profit_factor": 234.6702,
+              "avg_confidence": 0.9528,
+              "avg_uncertainty": 0.0
+            },
+            {
+              "regime": "TRENDING",
+              "n_signals": 36960,
+              "win_rate": 0.9903,
+              "profit_factor": 102.2402,
+              "avg_confidence": 0.9299,
+              "avg_uncertainty": 0.0
+            },
+            {
+              "regime": "VOLATILE",
+              "n_signals": 2121,
+              "win_rate": 0.9991,
+              "profit_factor": 1059.5,
+              "avg_confidence": 0.9411,
+              "avg_uncertainty": 0.0
+            }
+          ],
+          "n_total": 84094
+        }
+      },
+      "message": "All PF>1: RANGING, TRENDING, VOLATILE",
+      "details_path": null
+    }
+  ]
+}

@@ -54,7 +54,7 @@ export class RedisProtocolBus implements MessageBus {
       lazyConnect: opts.lazyConnect ?? false,
       redisOptions: opts.redisOptions,
     }
-    this.client = new Redis({
+    this.client = new Redis(this.opts.url, {
       ...(this.opts.redisOptions ?? {}),
       connectTimeout: this.opts.connectTimeoutMs,
       lazyConnect: this.opts.lazyConnect,
@@ -76,6 +76,15 @@ export class RedisProtocolBus implements MessageBus {
     )
   }
 
+  async publishRaw(stream: StreamName, data: Record<string, unknown>): Promise<void> {
+    await this.client.xadd(
+      stream.toString(),
+      "*",
+      "p",
+      JSON.stringify(data),
+    )
+  }
+
   async subscribe(
     stream: StreamName,
     handler: (tick: Tick) => Promise<void>,
@@ -83,7 +92,7 @@ export class RedisProtocolBus implements MessageBus {
     // XREAD-based pull loop. We use a dedicated connection because
     // ioredis reserves the main connection for commands; subscribers
     // need their own client.
-    const sub = new Redis({
+    const sub = new Redis(this.opts.url, {
       ...(this.opts.redisOptions ?? {}),
       connectTimeout: this.opts.connectTimeoutMs,
       maxRetriesPerRequest: 1,

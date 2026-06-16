@@ -51,7 +51,7 @@ class ModelConfig:
         "rsi", "ema_fast", "ema_medium", "ema_slow",
         "macd", "macd_signal", "macd_hist",
         "bb_upper", "bb_middle", "bb_lower",
-        "atr", "obv", "volume_sma", "pct_change",
+        "atr", "adx", "obv", "volume_sma", "pct_change",
     )
     target_lookahead: int = 5
     target_return_pct: float = 1.0

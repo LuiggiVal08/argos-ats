@@ -1,31 +1,27 @@
 import { Tick } from "../../domain/entities/tick"
+import { FundingRate } from "../../domain/value-objects/funding-rate"
+import { AggTrade } from "../../domain/value-objects/agg-trade"
 
 export type ExchangeConnectionState = "idle" | "connecting" | "open" | "closed"
 
-/**
- * Exchange WebSocket gateway port.
- *
- * Exchange-agnostic. The adapter (e.g. BinanceWebSocketAdapter) handles
- * the protocol details of a specific exchange (Binance, Bybit, OKX, ...).
- *
- * The application depends only on this interface — never on `ws`,
- * ccxt's `watch*` methods, or any exchange-specific library.
- */
-export interface ExchangeGateway {
-  /**
-   * Open a connection to the exchange and start emitting ticks via
-   * the handler. The handler MUST be safe to call concurrently.
-   * Idempotent: calling start() on an open connection is a no-op.
-   */
-  start(onTick: (tick: Tick) => Promise<void>): Promise<void>
+export interface ExchangeInfo {
+  reconnectAttempt: number
+  totalReconnects: number
+  connectedAt: number | null
+}
 
-  /**
-   * Orderly close of the WebSocket connection. Flushes any pending
-   * messages, sends the appropriate close frame, and releases the
-   * socket. After close(), start() may be called again to reconnect.
-   */
+export interface ExchangeGateway {
+  start(
+    onTick: (tick: Tick) => Promise<void>,
+    onFundingRate?: (fr: FundingRate) => Promise<void>,
+    onAggTrade?: (trade: AggTrade) => Promise<void>,
+  ): Promise<void>
+
   close(): Promise<void>
 
-  /** Current connection state. */
   state(): ExchangeConnectionState
+
+  lastTickAgeMs: number | null
+
+  exchangeInfo(): ExchangeInfo
 }

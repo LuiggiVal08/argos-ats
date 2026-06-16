@@ -234,6 +234,10 @@ class NovaQuantKerasModel(ModelTrainer, ModelPredictor):
         model.load_weights(buf)
         self._model = model
 
+    def get_model(self) -> tf.keras.Model | None:
+        """Expone el modelo Keras interno para uncertainty estimation."""
+        return self._model
+
     def is_loaded(self) -> bool:
         """True si hay un modelo cargado en memoria."""
         return self._model is not None

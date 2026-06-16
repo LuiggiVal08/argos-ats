@@ -9,10 +9,10 @@ from app.infrastructure.analysis.regime_feature_extractor import (
     RegimeFeatureExtractor,
 )
 
-# Standard 19-feature TaDataPreprocessor layout
+# Standard 20-feature TaDataPreprocessor layout
 # open, high, low, close, volume, rsi, ema_fast, ema_medium, ema_slow,
 # macd, macd_signal, macd_hist, bb_upper, bb_middle, bb_lower,
-# atr, obv, volume_sma, pct_change
+# atr, adx, obv, volume_sma, pct_change
 
 
 def _make_ohlcv(n: int) -> list[dict]:
@@ -33,17 +33,21 @@ def _make_ohlcv(n: int) -> list[dict]:
 
 
 def _make_features(n: int) -> np.ndarray:
-    """Generate mock feature array with 19 columns."""
-    # Populate with sensible defaults for BB/ATR/EMA columns
+    """Generate mock feature array with 20 columns."""
+    # Populate with sensible defaults for BB/ATR/EMA/ADX columns
     np.random.seed(42)
-    feats = np.random.randn(n, 19)
+    feats = np.random.randn(n, 20)
 
-    # bb_upper (12) > bb_middle (13) > bb_lower (14)
-    feats[:, 12] = feats[:, 13] + 0.5  # bb_upper = bb_middle + 0.5
-    feats[:, 14] = feats[:, 13] - 0.5  # bb_lower = bb_middle - 0.5
+    # bb_middle (13) = SMA(close) > 0, bb_upper > bb_middle > bb_lower
+    feats[:, 13] = np.abs(feats[:, 13]) + 100.0  # bb_middle positive (like a price)
+    feats[:, 12] = feats[:, 13] + 0.5             # bb_upper = bb_middle + 0.5
+    feats[:, 14] = feats[:, 13] - 0.5             # bb_lower = bb_middle - 0.5
 
     # atr (15) > 0
     feats[:, 15] = np.abs(feats[:, 15]) + 10.0
+
+    # adx (16) in [0, 100]
+    feats[:, 16] = np.abs(feats[:, 16]) + 20.0
 
     # ema_fast (6) > 0
     feats[:, 6] = np.abs(feats[:, 6]) + 100.0

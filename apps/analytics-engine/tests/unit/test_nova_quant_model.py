@@ -55,7 +55,7 @@ class TestNovaQuantModelConstruction:
                 model_version="1.0.0",
                 trained_at=datetime.now(timezone.utc),
                 weights_hash="x",
-                feature_means=(1.0, 2.0),  # 2 pero cfg tiene 15
+                feature_means=(1.0, 2.0),  # 2 pero cfg tiene 20
                 feature_stds=tuple(float(i) for i in range(len(cfg.features))),
             )
 

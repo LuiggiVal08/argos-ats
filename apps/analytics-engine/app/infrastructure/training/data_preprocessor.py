@@ -42,13 +42,13 @@ class TaDataPreprocessor:
     Implementa el port DataPreprocessor.
     """
 
-    # 19 features en orden estricto del tensor (coincide con dataset de Colab)
+    # 20 features en orden estricto del tensor (coincide con dataset de Colab)
     FEATURE_NAMES: tuple[str, ...] = (
         "open", "high", "low", "close", "volume",
         "rsi", "ema_fast", "ema_medium", "ema_slow",
         "macd", "macd_signal", "macd_hist",
         "bb_upper", "bb_middle", "bb_lower",
-        "atr", "obv", "volume_sma", "pct_change",
+        "atr", "adx", "obv", "volume_sma", "pct_change",
     )
 
     async def build_features(
@@ -114,15 +114,20 @@ class TaDataPreprocessor:
                 ).average_true_range()
             )
 
-            # ── 17: OBV ──────────────────────────────────────────────
+            # ── 17: ADX(14) ──────────────────────────────────────────
+            features.append(
+                ta.trend.ADXIndicator(high, low, close, window=14).adx()
+            )
+
+            # ── 18: OBV ──────────────────────────────────────────────
             features.append(
                 ta.volume.OnBalanceVolumeIndicator(close, volume).on_balance_volume()
             )
 
-            # ── 18: Volume SMA(20) ───────────────────────────────────
+            # ── 19: Volume SMA(20) ───────────────────────────────────
             features.append(volume.rolling(20).mean())
 
-            # ── 19: Price change % ───────────────────────────────────
+            # ── 20: Price change % ───────────────────────────────────
             features.append(close.pct_change() * 100.0)
 
             # Combinar y nombrar columnas
@@ -240,6 +245,61 @@ class TaDataPreprocessor:
 
         except Exception as e:
             raise PreprocessingError(f"create_targets failed: {e}") from e
+
+    async def create_targets_triple_barrier(
+        self,
+        ohlcv: list[dict],
+        atr_values: np.ndarray,
+        atr_multiplier: float = 1.5,
+        max_holding: int = 5,
+    ) -> np.ndarray:
+        """Triple Barrier labeling: BUY if TP hit first, SELL if SL hit first.
+
+        Barriers are placed at entry ± atr_multiplier × ATR.
+        If neither barrier is hit within max_holding candles → HOLD.
+        Uses high/low for barrier crossing (not just close).
+
+        Returns one-hot array (n, 3): BUY=[1,0,0], SELL=[0,1,0], HOLD=[0,0,1].
+        """
+        try:
+            df = pd.DataFrame(ohlcv)
+            df = _ensure_numeric(df)
+            close = df["close"].values.astype(np.float64)
+            high = df["high"].values.astype(np.float64)
+            low = df["low"].values.astype(np.float64)
+            atr = atr_values.astype(np.float64)
+
+            n = len(close)
+            targets = np.zeros((n, 3), dtype=np.float64)
+
+            for i in range(n - max_holding):
+                atr_i = atr[i]
+                if np.isnan(atr_i) or atr_i <= 0:
+                    targets[i] = [0.0, 0.0, 1.0]
+                    continue
+
+                tp = close[i] + atr_multiplier * atr_i
+                sl = close[i] - atr_multiplier * atr_i
+                hit = False
+
+                for t in range(i + 1, min(i + max_holding + 1, n)):
+                    if high[t] >= tp:
+                        targets[i] = [1.0, 0.0, 0.0]
+                        hit = True
+                        break
+                    if low[t] <= sl:
+                        targets[i] = [0.0, 1.0, 0.0]
+                        hit = True
+                        break
+
+                if not hit:
+                    targets[i] = [0.0, 0.0, 1.0]
+
+            targets[-max_holding:] = [0.0, 0.0, 1.0]
+            return targets
+
+        except Exception as e:
+            raise PreprocessingError(f"create_targets_triple_barrier failed: {e}") from e
 
 
 def _ensure_numeric(df: pd.DataFrame) -> pd.DataFrame:

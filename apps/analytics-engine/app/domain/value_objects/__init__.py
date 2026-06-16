@@ -1,5 +1,8 @@
 """Domain value objects."""
+from .agg_trade import AggTrade
 from .atr import Atr, InvalidAtrError
+from .funding_rate import FundingRate
+from .open_interest import OpenInterest
 from .backtest_config import BacktestConfig
 from .backtest_metrics import BacktestMetrics
 from .backtest_trade import BacktestTrade
@@ -20,10 +23,24 @@ from .risk_pct import (
 )
 from .signal_side import SignalSide
 from .trading_signal import TradingSignal
+from .validation_metrics import (
+    BrierScore,
+    CalibrationMetrics,
+    ClassDistribution,
+    ConfusionMetrics,
+    ECE,
+    FeatureImportance,
+    RegimeBreakdown,
+    RegimeMetrics,
+    UncertaintyMetrics,
+)
 
 __all__ = [
+    "AggTrade",
     "Atr",
+    "FundingRate",
     "InvalidAtrError",
+    "OpenInterest",
     "BacktestConfig",
     "BacktestMetrics",
     "BacktestTrade",
@@ -47,4 +64,13 @@ __all__ = [
     "MAX_RISK_PCT",
     "SignalSide",
     "TradingSignal",
+    "BrierScore",
+    "CalibrationMetrics",
+    "ClassDistribution",
+    "ConfusionMetrics",
+    "ECE",
+    "FeatureImportance",
+    "RegimeBreakdown",
+    "RegimeMetrics",
+    "UncertaintyMetrics",
 ]

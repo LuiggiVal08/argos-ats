@@ -1,9 +1,37 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Literal
 
 from ..value_objects.model_version import ModelVersion
+
+ComponentType = Literal["lstm", "xgb", "meta", "calibrator"]
+
+_ALL_COMPONENTS: tuple[ComponentType, ...] = ("lstm", "xgb", "meta", "calibrator")
+
+
+@dataclass(frozen=True)
+class ComponentRecord:
+    component: ComponentType
+    version: str
+    artifact_path: str
+    scaler_version: str | None = None
+    dataset_version: str | None = None
+    git_commit: str = ""
+    hyperparameters: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, float] = field(default_factory=dict)
+    trained_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    features_used: tuple[str, ...] = field(default_factory=tuple)
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "component": self.component,
+            "version": self.version,
+            "artifact_path": self.artifact_path,
+            "metrics": self.metrics,
+            "trained_at": self.trained_at.isoformat(),
+        }
 
 
 @dataclass(frozen=True)
@@ -30,6 +58,9 @@ class ModelRegistry:
     def __init__(self) -> None:
         self._records: dict[str, ModelRecord] = {}
         self._champion: ModelRecord | None = None
+        self._components: dict[ComponentType, dict[str, ComponentRecord]] = {
+            c: {} for c in _ALL_COMPONENTS
+        }
 
     def register(self, record: ModelRecord) -> None:
         key = str(record.version)
@@ -97,3 +128,31 @@ class ModelRegistry:
 
     def count(self) -> int:
         return len(self._records)
+
+    def register_component(self, record: ComponentRecord) -> None:
+        comp = record.component
+        key = record.version
+        if key in self._components[comp]:
+            raise ValueError(f"{comp} version {key} already registered")
+        self._components[comp][key] = record
+
+    def get_component(
+        self, component: ComponentType, version: str
+    ) -> ComponentRecord | None:
+        return self._components[component].get(version)
+
+    def list_component_versions(
+        self, component: ComponentType
+    ) -> list[ComponentRecord]:
+        return sorted(
+            self._components[component].values(),
+            key=lambda r: r.version,
+            reverse=True,
+        )
+
+    def latest_component(self, component: ComponentType) -> ComponentRecord | None:
+        versions = self.list_component_versions(component)
+        return versions[0] if versions else None
+
+    def all_components(self) -> dict[ComponentType, ComponentRecord | None]:
+        return {c: self.latest_component(c) for c in _ALL_COMPONENTS}

@@ -84,7 +84,7 @@ class TestModelConfig:
         assert cfg.lookback == 60
         assert cfg.confidence_threshold == 0.7
         assert cfg.layers == (128, 64, 32, 16)
-        assert len(cfg.features) == 19
+        assert len(cfg.features) == 20
         assert cfg.target_lookahead == 5
         assert cfg.target_return_pct == 1.0
         assert cfg.dropout_rate == 0.2

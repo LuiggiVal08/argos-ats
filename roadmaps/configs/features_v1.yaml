@@ -1,0 +1,30 @@
+name: "features-v1-baseline"
+version: "0.1.0"
+description: "Feature set actual del baseline. OHLCV + TA estándar."
+
+features:
+  groups: ["ohlcv", "ta"]
+  lookback: 20
+  list:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - rsi
+    - ema_fast
+    - ema_medium
+    - ema_slow
+    - macd
+    - macd_signal
+    - macd_hist
+    - bb_upper
+    - bb_middle
+    - bb_lower
+    - atr
+    - adx
+    - obv
+    - volume_sma
+    - pct_change
+
+total_features: 20

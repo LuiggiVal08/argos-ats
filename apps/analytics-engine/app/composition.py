@@ -51,6 +51,8 @@ from .application.ports.data_preprocessor import DataPreprocessor
 from .application.ports.execution_logger import ExecutionLogger
 from .application.ports.feature_store import FeatureStore
 from .application.ports.incident_reporter import IncidentReporter
+from .application.ports.model_predictor import ModelPredictor
+from .application.ports.model_trainer import ModelTrainer
 from .application.ports.notifier import Notifier
 from .application.ports.incident_repository import IncidentRepository
 from .application.ports.position_repository import PositionRepository
@@ -88,6 +90,14 @@ from .application.use_cases.report_incident_extended import (
     ReportIncidentExtendedUseCase,
 )
 from .application.use_cases.rollback_model import RollbackModelUseCase
+from .application.use_cases.ensemble_training import (
+    EnsembleTrainingError,
+    EnsembleTrainingUseCase,
+)
+from .application.use_cases.predict_ensemble import (
+    PredictEnsembleError,
+    PredictEnsembleSignalUseCase,
+)
 from .application.use_cases.run_backtest import RunBacktestUseCase
 from .application.use_cases.run_walk_forward import RunWalkForwardUseCase
 from .application.use_cases.train_model import TrainModelUseCase
@@ -711,6 +721,120 @@ def get_backtest_registry(request: Request) -> StrategyDictRegistry:
 
 
 # H6 — NovaQuant model use cases (built on demand, cached in app.state) -------
+
+def get_ensemble_training_usecase(request: Request) -> EnsembleTrainingUseCase:
+    """Return EnsembleTrainingUseCase, cached in app.state."""
+    cached: EnsembleTrainingUseCase | None = getattr(
+        request.app.state, "ensemble_training_usecase", None
+    )
+    if cached is not None:
+        return cached
+
+    comp = _comp(request)
+
+    if comp.mode == "BACKTESTING":
+        ohlcv_source: OhlcvSource = _FakeOhlcvSource()  # type: ignore[arg-type]
+    else:
+        exchange = comp.exchange
+        if exchange is None:
+            raise RuntimeError("exchange is None in non-BACKTESTING mode")
+        ohlcv_source = _CcxtOhlcvAdapter(exchange)
+
+    from .infrastructure.training.data_preprocessor import TaDataPreprocessor
+    from .infrastructure.training.feature_analyzer_impl import CorrelationFeatureAnalyzer
+    from .infrastructure.models.calibrator import SklearnProbabilityCalibrator
+    from .infrastructure.models.checkpoint_repo_fs import FsCheckpointRepository
+    from .infrastructure.models.meta_model import XGBoostMetaModel
+    from .infrastructure.models.nova_quant_keras import NovaQuantKerasModel
+    from .infrastructure.models.nova_quant_xgboost import NovaQuantXGBoostModel
+
+    preprocessor = TaDataPreprocessor()
+    analyzer = CorrelationFeatureAnalyzer()
+    repo = FsCheckpointRepository()
+    lstm = NovaQuantKerasModel()
+    xgb = NovaQuantXGBoostModel()
+    meta_model = XGBoostMetaModel()
+    calibrator = SklearnProbabilityCalibrator()
+
+    use_case = EnsembleTrainingUseCase(
+        ohlcv_source=ohlcv_source,
+        preprocessor=preprocessor,
+        analyzer=analyzer,
+        lstm_trainer=lstm,
+        xgb_trainer=xgb,
+        lstm_predictor=lstm,
+        xgb_predictor=xgb,
+        meta_model=meta_model,
+        calibrator=calibrator,
+        repo=repo,
+    )
+    request.app.state.ensemble_training_usecase = use_case
+    return use_case
+
+
+def get_predict_ensemble_usecase(request: Request) -> PredictEnsembleSignalUseCase:
+    """Return PredictEnsembleSignalUseCase, cached in app.state."""
+    cached: PredictEnsembleSignalUseCase | None = getattr(
+        request.app.state, "predict_ensemble_usecase", None
+    )
+    if cached is not None:
+        return cached
+
+    comp = _comp(request)
+
+    if comp.mode == "BACKTESTING":
+        ohlcv_source: OhlcvSource = _FakeOhlcvSource()  # type: ignore[arg-type]
+    else:
+        exchange = comp.exchange
+        if exchange is None:
+            raise RuntimeError("exchange is None in non-BACKTESTING mode")
+        ohlcv_source = _CcxtOhlcvAdapter(exchange)
+
+    from .infrastructure.analysis.confidence_filter import SignalConfidenceFilter
+    from .infrastructure.analysis.regime_detector import RuleBasedRegimeDetector
+    from .infrastructure.models.calibrator import SklearnProbabilityCalibrator
+    from .infrastructure.models.checkpoint_repo_fs import FsCheckpointRepository
+    from .infrastructure.models.meta_model import XGBoostMetaModel
+    from .infrastructure.models.nova_quant_keras import NovaQuantKerasModel
+    from .infrastructure.models.nova_quant_xgboost import NovaQuantXGBoostModel
+    from .infrastructure.training.data_preprocessor import TaDataPreprocessor
+
+    preprocessor = TaDataPreprocessor()
+    repo = FsCheckpointRepository()
+    lstm = NovaQuantKerasModel()
+    xgb = NovaQuantXGBoostModel()
+    meta_model = XGBoostMetaModel()
+    calibrator = SklearnProbabilityCalibrator()
+    confidence_filter = SignalConfidenceFilter()
+    regime_detector = RuleBasedRegimeDetector()
+
+    # Activar UncertaintyEstimator si el modelo LSTM ya está cargado
+    uncertainty_estimator = None
+    tf_model = lstm.get_model()
+    if tf_model is not None:
+        try:
+            from .infrastructure.models.uncertainty_estimator import (
+                MCDropoutUncertaintyEstimator,
+            )
+            uncertainty_estimator = MCDropoutUncertaintyEstimator(tf_model)
+        except Exception:
+            pass
+
+    use_case = PredictEnsembleSignalUseCase(
+        ohlcv_source=ohlcv_source,
+        preprocessor=preprocessor,
+        lstm_predictor=lstm,
+        xgb_predictor=xgb,
+        repo=repo,
+        meta_model=meta_model,
+        calibrator=calibrator,
+        uncertainty_estimator=uncertainty_estimator,
+        confidence_filter=confidence_filter,
+        regime_detector=regime_detector,
+    )
+    request.app.state.predict_ensemble_usecase = use_case
+    return use_case
+
 
 @dataclass
 class _ModelUseCases:

@@ -12,7 +12,7 @@ export class RedisCandlePublisher implements CandlePublisher {
   private readonly client: Redis
 
   constructor(opts: RedisCandlePublisherOptions) {
-    this.client = new Redis({
+    this.client = new Redis(opts.url, {
       connectTimeout: opts.connectTimeoutMs ?? 2000,
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,

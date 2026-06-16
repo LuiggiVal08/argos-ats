@@ -1,5 +1,6 @@
 """Domain entities (pure business rules)."""
 from .backtest_engine import BacktestEngine, BacktestError
+from .multi_timeframe_aligner import MultiTimeframeAligner
 from .correlation_engine import CorrelationEngine
 from .market_context import MarketContext
 from .nova_quant_model import (
@@ -36,10 +37,17 @@ from .signal_validator import (
     SignalValidator,
     ValidationResult,
 )
+from .validation_report import (
+    CheckStatus,
+    CheckType,
+    ValidationCheck,
+    ValidationReport,
+)
 
 __all__ = [
     "BacktestEngine",
     "BacktestError",
+    "MultiTimeframeAligner",
     "CorrelationEngine",
     "MarketContext",
     "PortfolioDecision",
@@ -66,4 +74,8 @@ __all__ = [
     "RejectionReason",
     "SignalValidator",
     "ValidationResult",
+    "CheckStatus",
+    "CheckType",
+    "ValidationCheck",
+    "ValidationReport",
 ]

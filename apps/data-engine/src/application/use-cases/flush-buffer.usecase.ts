@@ -9,18 +9,11 @@ export interface FlushResult {
   reBuffered: number
 }
 
-/**
- * Drain the in-memory buffer and re-publish each tick to the broker.
- *
- * Called when the HealthMonitor transitions from unhealthy to
- * healthy. If a publish fails mid-flush, the remaining ticks stay
- * in the buffer (no double-loss, no double-publish).
- */
 export class FlushBufferUseCase {
   constructor(
     private readonly bus: MessageBus,
     private readonly buffer: TickBuffer,
-    private readonly stream: StreamName,
+    private readonly streamPrefix: string,
   ) {}
 
   async execute(): Promise<FlushResult> {
@@ -31,18 +24,15 @@ export class FlushBufferUseCase {
     for (let i = 0; i < ticks.length; i++) {
       const t = ticks[i]!
       if (failed) {
-        // Preserve the remaining ticks verbatim: push them back in
-        // the original order. Buffer is FIFO so order matters.
         await this.buffer.push(t)
         reBuffered++
         continue
       }
       try {
-        await this.bus.publish(this.stream, t)
+        const stream = StreamName.forTicks(t.symbol, this.streamPrefix)
+        await this.bus.publish(stream, t)
         published++
       } catch {
-        // Mark as failed; the current tick and all subsequent ones
-        // must be re-buffered to avoid loss.
         failed = true
         await this.buffer.push(t)
         reBuffered++
