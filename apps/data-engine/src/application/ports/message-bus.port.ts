@@ -14,6 +14,9 @@ export interface MessageBus {
   /** Publish a tick event to a stream. Throws on broker error. */
   publish(stream: StreamName, tick: Tick): Promise<void>
 
+  /** Publish arbitrary JSON-serializable data to a stream. */
+  publishRaw(stream: StreamName, data: Record<string, unknown>): Promise<void>
+
   /**
    * Subscribe to a stream. The handler is invoked for each event.
    * Returns an unsubscribe function.

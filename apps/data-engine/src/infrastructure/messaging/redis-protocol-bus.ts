@@ -76,6 +76,15 @@ export class RedisProtocolBus implements MessageBus {
     )
   }
 
+  async publishRaw(stream: StreamName, data: Record<string, unknown>): Promise<void> {
+    await this.client.xadd(
+      stream.toString(),
+      "*",
+      "p",
+      JSON.stringify(data),
+    )
+  }
+
   async subscribe(
     stream: StreamName,
     handler: (tick: Tick) => Promise<void>,

@@ -27,6 +27,7 @@ import { RedisCandlePublisher } from "./infrastructure/messaging/redis-candle-pu
 import { Symbol as SymbolVo } from "./domain/value-objects/symbol"
 import { StreamName } from "./domain/value-objects/stream-name"
 import { IngestTickUseCase } from "./application/use-cases/ingest-tick.usecase"
+import { IngestAdditionalDataUseCase } from "./application/use-cases/ingest-additional-data.usecase"
 import { BufferTickUseCase } from "./application/use-cases/buffer-tick.usecase"
 import { FlushBufferUseCase } from "./application/use-cases/flush-buffer.usecase"
 import { HealthMonitorUseCase } from "./application/use-cases/health-monitor.usecase"
@@ -90,7 +91,7 @@ const tickBufferProvider: Provider = {
 const exchangeProvider: Provider = {
   provide: EXCHANGE_GATEWAY,
   useFactory: (): ExchangeGateway =>
-    createExchangeAdapter(log),
+    createExchangeAdapter(log, true),
 }
 
 const healthMonitorProvider: Provider = {
@@ -211,6 +212,13 @@ const replayProvider: Provider = {
   ): ReplayMarketUseCase => new ReplayMarketUseCase(store, bus),
 }
 
+const ingestAdditionalProvider: Provider = {
+  provide: IngestAdditionalDataUseCase,
+  inject: [BUS],
+  useFactory: (bus: RedisProtocolBus): IngestAdditionalDataUseCase =>
+    new IngestAdditionalDataUseCase(bus),
+}
+
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
   controllers: [HealthController, HealthControllerBus],
@@ -233,6 +241,7 @@ const replayProvider: Provider = {
     calculateFeaturesProvider,
     eventStoreProvider,
     replayProvider,
+    ingestAdditionalProvider,
     TickPipelineService,
     CandlePipelineService,
     FeaturePipelineService,

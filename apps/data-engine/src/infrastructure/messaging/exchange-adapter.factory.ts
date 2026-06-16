@@ -21,11 +21,12 @@ function parseSymbols(raw: string): Symbol[] {
     .map((s) => Symbol.parse(s))
 }
 
-function binanceUrl(symbols: Symbol[]): string {
-  const streams = symbols
-    .map((s) => `${s.toStreamId().toLowerCase()}@trade`)
-    .join("/")
-  return `${BINANCE_COMBINED}${streams}`
+function binanceUrl(symbols: Symbol[], additionalStreams = false): string {
+  const tradeStreams = symbols.map((s) => `${s.toStreamId().toLowerCase()}@trade`)
+  if (!additionalStreams) return `${BINANCE_COMBINED}${tradeStreams.join("/")}`
+  const aggTrade = symbols.map((s) => `${s.toStreamId().toLowerCase()}@aggTrade`)
+  const all = [...tradeStreams, ...aggTrade, "!markPrice@arr@1s"]
+  return `${BINANCE_COMBINED}${all.join("/")}`
 }
 
 interface ConfigJson {
@@ -72,6 +73,7 @@ function resolveExchangeType(config: ConfigJson | null): ExchangeType {
 
 export function createExchangeAdapter(
   logger?: (msg: string) => void,
+  additionalStreams = false,
 ): ExchangeGateway {
   const config = readConfigJson()
   const type = resolveExchangeType(config)
@@ -80,8 +82,8 @@ export function createExchangeAdapter(
 
   switch (type) {
     case "binance": {
-      const url = explicitUrl ?? binanceUrl(symbols)
-      return new BinanceWebSocketAdapter({ url, logger })
+      const url = explicitUrl ?? binanceUrl(symbols, additionalStreams)
+      return new BinanceWebSocketAdapter({ url, logger, additionalStreams })
     }
     default:
       throw new Error(

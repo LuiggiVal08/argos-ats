@@ -30,6 +30,9 @@ class FakeBus implements MessageBus {
     if (this.failPublish) throw new Error("broker-down")
     this.published.push(t)
   }
+  async publishRaw(_s: StreamName, _d: Record<string, unknown>): Promise<void> {
+    // no-op for additional data tests
+  }
   async subscribe(
     _s: StreamName,
     h: (t: Tick) => Promise<void>,

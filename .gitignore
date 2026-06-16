@@ -61,6 +61,9 @@ build/
 
 # Data / training artifacts (regenerated on export)
 data/
+!apps/analytics-engine/app/infrastructure/data/
+checkpoints/
+reports/
 *.zip
 *.npy
 *.h5

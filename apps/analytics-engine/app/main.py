@@ -22,6 +22,7 @@ from .api import (
     training_router,
 )
 from .composition import Composition, build_composition
+from .infrastructure.data.additional_data_consumer import AdditionalDataConsumer
 
 log = structlog.get_logger()
 app = FastAPI(title="argos-analytics-engine", version="0.1.0")
@@ -46,6 +47,12 @@ async def lifespan(_: FastAPI):
     app.state.composition = comp
     log.info("composition_built", mode=comp.mode, has_exchange=comp.exchange is not None)
 
+    raw_symbol = os.environ.get("SYMBOL", "BTC/USDT")
+    symbols = [s.strip() for s in os.environ.get("SYMBOLS", raw_symbol).split(",")]
+    additional_consumer = AdditionalDataConsumer(symbols)
+    await additional_consumer.start()
+    app.state.additional_data_consumer = additional_consumer
+
     consumer_task = asyncio.create_task(_consume_ticks())
     try:
         yield
@@ -55,6 +62,7 @@ async def lifespan(_: FastAPI):
             await consumer_task
         except asyncio.CancelledError:
             pass
+        await additional_consumer.stop()
         # Close CCXT client on shutdown if LIVE/PAPER.
         if comp.exchange is not None:
             try:
@@ -129,6 +137,35 @@ async def health() -> dict:
     return {
         "status": "ok",
         "mode": os.environ.get("ENVIRONMENT_MODE", "PAPER_TRADING"),
+    }
+
+
+@app.get("/features/additional")
+async def additional_features() -> dict:
+    consumer: AdditionalDataConsumer | None = getattr(
+        app.state, "additional_data_consumer", None
+    )
+    if consumer is None:
+        return {"status": "not_initialized"}
+    raw_symbol = os.environ.get("SYMBOL", "BTC/USDT")
+    features = await consumer.get_additional_features(raw_symbol)
+    return {
+        "symbol": raw_symbol,
+        "features": features,
+    }
+
+
+@app.get("/features/additional/{symbol:path}")
+async def additional_features_by_symbol(symbol: str) -> dict:
+    consumer: AdditionalDataConsumer | None = getattr(
+        app.state, "additional_data_consumer", None
+    )
+    if consumer is None:
+        return {"status": "not_initialized"}
+    features = await consumer.get_additional_features(symbol)
+    return {
+        "symbol": symbol,
+        "features": features,
     }
 
 

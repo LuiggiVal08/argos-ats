@@ -9,6 +9,8 @@ import {
   BinanceTradeEvent,
   tickFromBinanceTrade,
 } from "./in-memory-tick-buffer"
+import { FundingRate } from "../../domain/value-objects/funding-rate"
+import { AggTrade } from "../../domain/value-objects/agg-trade"
 
 export interface BinanceWebSocketAdapterOptions {
   url?: string
@@ -18,6 +20,7 @@ export interface BinanceWebSocketAdapterOptions {
   reconnectMaxMs?: number
   maxReconnectAttempts?: number | null
   logger?: (msg: string) => void
+  additionalStreams?: boolean
 }
 
 const DEFAULT_URL =
@@ -25,6 +28,30 @@ const DEFAULT_URL =
 const MAX_BACKOFF = 30_000
 const BASE_BACKOFF = 1_000
 const PONG_TIMEOUT_MS = 10_000
+
+interface BinanceMarkPriceEvent {
+  e: "markPriceUpdate"
+  s: string
+  p: string
+  i: string
+  P: string
+  r: string
+  T: number
+  E: number
+}
+
+interface BinanceAggTradeEvent {
+  e: "aggTrade"
+  s: string
+  a: number
+  p: string
+  q: string
+  f: number
+  l: number
+  T: number
+  m: boolean
+  M: boolean
+}
 
 export class BinanceWebSocketAdapter implements ExchangeGateway {
   private ws: WebSocket | null = null
@@ -37,6 +64,8 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
   private connectedAt: number | null = null
   private intentionalClose = false
   private onTickHandler: ((tick: Tick) => Promise<void>) | null = null
+  private onFundingRateHandler: ((fr: FundingRate) => Promise<void>) | null = null
+  private onAggTradeHandler: ((trade: AggTrade) => Promise<void>) | null = null
   private lastTickTs: number | null = null
   private readonly log: (msg: string) => void
   private readonly opts: Required<Omit<BinanceWebSocketAdapterOptions, "logger">>
@@ -49,6 +78,7 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       reconnectBaseMs: opts.reconnectBaseMs ?? BASE_BACKOFF,
       reconnectMaxMs: opts.reconnectMaxMs ?? MAX_BACKOFF,
       maxReconnectAttempts: opts.maxReconnectAttempts ?? null,
+      additionalStreams: opts.additionalStreams ?? false,
     }
     this.log =
       opts.logger ??
@@ -69,7 +99,11 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
     }
   }
 
-  async start(onTick: (tick: Tick) => Promise<void>): Promise<void> {
+  async start(
+    onTick: (tick: Tick) => Promise<void>,
+    onFundingRate?: (fr: FundingRate) => Promise<void>,
+    onAggTrade?: (trade: AggTrade) => Promise<void>,
+  ): Promise<void> {
     if (this.connState === "open" || this.connState === "connecting") {
       this.log(`start() ignored — already ${this.connState}`)
       return
@@ -77,11 +111,17 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
     this.intentionalClose = false
     this.reconnectAttempt = 0
     this.onTickHandler = onTick
+    this.onFundingRateHandler = onFundingRate ?? null
+    this.onAggTradeHandler = onAggTrade ?? null
     this.connState = "connecting"
-    await this.open(onTick)
+    await this.open(onTick, onFundingRate, onAggTrade)
   }
 
-  private async open(onTick: (tick: Tick) => Promise<void>): Promise<void> {
+  private async open(
+    onTick: (tick: Tick) => Promise<void>,
+    onFundingRate?: (fr: FundingRate) => Promise<void>,
+    onAggTrade?: (trade: AggTrade) => Promise<void>,
+  ): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.opts.url)
       this.ws = ws
@@ -119,13 +159,39 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
         try {
           const msg = JSON.parse(data.toString("utf8")) as {
             stream?: string
-            data?: BinanceTradeEvent
+            data?: Record<string, unknown>
           }
-          const trade = msg.data
-          if (!trade || trade.e !== "trade") return
-          this.lastTickTs = Date.now()
-          const tick = tickFromBinanceTrade(trade)
-          void onTick(tick)
+          if (!msg.data) return
+          const d = msg.data as Record<string, unknown>
+
+          if (d.e === "trade") {
+            this.lastTickTs = Date.now()
+            const tick = tickFromBinanceTrade(d as unknown as BinanceTradeEvent)
+            void onTick(tick)
+          } else if (d.e === "markPriceUpdate" && onFundingRate) {
+            const m = d as unknown as BinanceMarkPriceEvent
+            const fr = FundingRate.create({
+              symbol: m.s,
+              fundingRate: parseFloat(m.r),
+              markPrice: parseFloat(m.p),
+              indexPrice: parseFloat(m.i),
+              settlePrice: parseFloat(m.P),
+              nextFundingTime: m.T,
+              ts: m.E,
+            })
+            void onFundingRate(fr)
+          } else if (d.e === "aggTrade" && onAggTrade) {
+            const a = d as unknown as BinanceAggTradeEvent
+            const trade = AggTrade.create({
+              symbol: a.s,
+              tradeId: a.a,
+              price: parseFloat(a.p),
+              quantity: parseFloat(a.q),
+              isBuyerMaker: a.m,
+              ts: a.T,
+            })
+            void onAggTrade(trade)
+          }
         } catch (e) {
           this.log(`parse error: ${(e as Error).message}`)
         }
@@ -176,8 +242,9 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       if (this.intentionalClose) return
       this.log(`reconnecting...`)
       this.connState = "connecting"
-      if (this.onTickHandler) {
-        void this.open(this.onTickHandler).catch((err) => {
+      const h = this.onTickHandler
+      if (h) {
+        void this.open(h, this.onFundingRateHandler ?? undefined, this.onAggTradeHandler ?? undefined).catch((err) => {
           this.log(`reconnect failed: ${err.message}`)
           this.scheduleReconnect()
         })

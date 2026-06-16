@@ -1,5 +1,8 @@
 """Domain value objects."""
+from .agg_trade import AggTrade
 from .atr import Atr, InvalidAtrError
+from .funding_rate import FundingRate
+from .open_interest import OpenInterest
 from .backtest_config import BacktestConfig
 from .backtest_metrics import BacktestMetrics
 from .backtest_trade import BacktestTrade
@@ -33,8 +36,11 @@ from .validation_metrics import (
 )
 
 __all__ = [
+    "AggTrade",
     "Atr",
+    "FundingRate",
     "InvalidAtrError",
+    "OpenInterest",
     "BacktestConfig",
     "BacktestMetrics",
     "BacktestTrade",
