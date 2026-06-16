@@ -1,0 +1,30 @@
+name: "target-regression"
+version: "0.1.0"
+description: "Regresión continua de retornos logarítmicos futuros."
+
+data:
+  symbols: ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+  timeframe: "1h"
+  start: "2020-01-01"
+  end: "2026-06-01"
+
+target:
+  method: "regression"
+  params:
+    lookahead: 5
+    target: "future_log_return"
+
+features:
+  groups: ["ohlcv", "ta"]
+  lookback: 20
+
+model:
+  type: "lstm"  # con capa de salida lineal
+  params:
+    layers: [128, 64, 32, 16]
+    dropout: 0.2
+    output_activation: "linear"
+
+evaluation:
+  metrics: ["mse", "mae", "correlation", "directional_accuracy", "ic"]
+  gates: ["g0_no_alpha"]

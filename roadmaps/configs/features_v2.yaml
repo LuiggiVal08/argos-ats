@@ -1,0 +1,35 @@
+name: "features-v2-augmented"
+version: "0.2.0"
+description: "Feature set expandido con lags, retornos, volatilidad avanzada, z-scores, momentum, regime y cross-symbol."
+
+features:
+  groups: ["ohlcv", "ta", "returns", "lags", "volatility", "zscore", "momentum", "regime", "cross_symbol"]
+  lookback: 60
+
+  returns:
+    windows: [1, 3, 6, 12, 24]
+
+  lags:
+    columns: ["close"]
+    windows: [1, 3, 6, 12]
+
+  volatility:
+    windows: [6, 12, 24]
+    methods: ["rolling_std"]
+
+  zscore:
+    columns: ["close", "volume"]
+    window: 20
+
+  momentum:
+    windows: [3, 6, 12]
+    methods: ["roc"]
+
+  regime:
+    trend: ["ema_slope_quantized"]
+    volatility: ["atr_percentile"]
+
+  cross_symbol:
+    - btc_dominance
+    - eth_btc_ratio
+    - rolling_correlations

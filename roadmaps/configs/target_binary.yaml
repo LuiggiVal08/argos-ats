@@ -1,0 +1,32 @@
+name: "target-binary"
+version: "0.1.0"
+description: "Clasificación binaria BUY vs SELL, eliminando muestras HOLD cercanas a cero."
+
+data:
+  symbols: ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+  timeframe: "1h"
+  start: "2020-01-01"
+  end: "2026-06-01"
+
+target:
+  method: "binary"
+  params:
+    lookahead: 5
+    hold_threshold: 0.002  # eliminar muestras con |return| < 0.2%
+  classes: ["BUY", "SELL"]
+
+features:
+  groups: ["ohlcv", "ta"]
+  lookback: 20
+
+model:
+  type: "lstm"
+  params:
+    layers: [128, 64, 32, 16]
+    dropout: 0.2
+    output_units: 2
+    output_activation: "softmax"
+
+evaluation:
+  metrics: ["f1", "kappa", "mcc", "precision", "recall"]
+  gates: ["g1_signal_existence"]
