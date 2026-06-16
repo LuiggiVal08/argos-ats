@@ -1,11 +1,11 @@
 ---
 project: argos-bot
-total_tasks: 94
-completed: 94
+total_tasks: 98
+completed: 98
 in_progress: 0
 blocked: 0
 overall_pct: 100
-last_updated: 2026-06-11
+last_updated: 2026-06-16
 ---
 
 # TASKS — argos-bot
@@ -39,6 +39,18 @@ last_updated: 2026-06-11
 | H13–22| ARGOS 2.0 Part II        | ✅     | 100%   | 8/8    |
 | H40–50| ARGOS 2.0 Part V         | ✅     | 100%   | 24/24  |
 | H51–59| ARGOS 2.0 Part VI        | ✅     | 100%   | 11/11  |
+| Q00   | Quant V2 — Baseline          | ✅     | 100%   | 2/2    |
+| Q01   | Quant V2 — Freeze Baseline    | ✅     | 100%   | 3/3    |
+| Q02   | Quant V2 — Signal Val. Sprint | ✅     | 100%   | 4/4    |
+| Q03   | Quant V2 — Feature Audit      | 🚫     | 0%     | 0/4    |
+| Q04   | Quant V2 — New Features       | 🚫     | 0%     | 0/5    |
+| Q05   | Quant V2 — Simple Baselines   | 🚫     | 0%     | 0/6    |
+| Q06   | Quant V2 — Alpha Validation   | 🚫     | 0%     | 0/4    |
+| Q07   | Quant V2 — Advanced Models    | 🚫     | 0%     | 0/3    |
+| Q08   | Quant V2 — Loss Functions     | 🚫     | 0%     | 0/4    |
+| Q09   | Quant V2 — Realistic BTest    | 🚫     | 0%     | 0/5    |
+| Q10   | Quant V2 — Scaling            | 🚫     | 0%     | 0/3    |
+| QX    | Quant V2 — Temporal Audit     | 🚫     | 0%     | 0/5    |
 
 ---
 
@@ -654,3 +666,161 @@ _Ninguno actualmente._
 - ✅ Mock repos en tests actualizados con `symbol: str = ""`
 - ✅ Full test suite: 483 passed, 1 skipped (sin regresiones)
 - 🎯 **Próximo**: exportar datos (6 símbolos, ~1h), subir ZIP a Colab, correr notebook, importar checkpoints, validar pipeline de predicción.
+
+### 2026-06-15 — Sesión: Data-engine mejoras + Multi-symbol routing fix
+- ✅ DNS + healthcheck (8e97c30): DNS 8.8.8.8/1.1.1.1 en docker-compose, healthcheck descomentado
+- ✅ Reconexión WS + graceful shutdown + health exchange + factory (fe28491): BinanceWebSocketAdapter con exponential backoff (1s→30s capped), enableShutdownHooks(), /health/exchange, exchange-adapter.factory.ts multi-exchange
+- ✅ Pong timeout + multi-symbol + config.json + drain buffer + metrics (84b9b90): pong timeout 10s, SYMBOL acepta lista separada por comas, config.json integration (env pisa config), drain buffer on shutdown, reconnectAttempt/totalReconnects/connectedAt en health endpoint
+- ✅ Multi-symbol routing fix (4b0de5f → PR mergeado a dev): `IngestTickUseCase.execute()` acepta stream opcional por tick; `FlushBufferUseCase` computa stream por `tick.symbol`; `TickPipelineService` construye `StreamName.forTicks(symbol, prefix)`; Redis URL constructor fix en 3 adaptadores
+- ✅ Validación: tsc --noEmit, eslint, jest, arch_lint PASS, secret_scan clean
+- 🐛 Bug: ticks:ethusdt = 0 porque `IngestTickUseCase` publicaba todos los ticks al primer stream. Corregido con routing por tick.symbol.
+- 🎯 Branch `feature/h1-multi-symbol-routing` pusheada y mergeada a dev.
+
+---
+
+## ✅ Q00 — Quant V2: Baseline + Roadmap
+
+> Documentación del baseline actual y creación del roadmap cuantitativo V2.
+
+- [x] Q00-001 — Auditoría cuantitativa completa del pipeline actual (10 secciones)
+- [x] Q00-002 — Crear `roadmaps/ROADMAP_QUANT_V2.md` con estructura V4 (gates, framing lock, criterios de éxito)
+
+---
+
+## ✅ Q01 — Quant V2: Freeze Baseline
+
+> Preservar baseline reproducible para comparaciones futuras.
+
+- [x] Q01-001 — Documentar métricas de los 6 símbolos en el roadmap (accuracy, F1, Kappa, confusion matrices)
+- [x] Q01-002 — Crear configs de experimentos en `roadmaps/configs/`
+- [x] Q01-003 — Versionar código en 0.1.0 (package.json, pyproject.toml)
+
+---
+
+## ✅ Q02 — Quant V2: Signal Validation Sprint
+
+> Sprint de falsación científica (FASE 2 del roadmap cuantitativo V2).
+> Hipótesis: ¿Existe señal predictiva explotable en OHLCV+TA en 1h?
+> **Veredicto: CASO_B** — Señal débil detectada (delta=+0.063, best=HistGB 3-class),
+> pero no explotable económicamente. Feature space considerado INVALIDO.
+> Post-sprint pipeline NO activado per ROADMAP_QUANT_V2.md Sección A/C.
+
+- [x] Q02-001 — Crear sprint_runner.py con data loader, feature engine, 4 modelos, 3 framings
+- [x] Q02-002 — Ejecutar framing A (3-class BUY/HOLD/SELL) con walk-forward + shuffle test
+- [x] Q02-003 — Ejecutar framing B (binary BUY vs SELL) y framing C (regression Ridge+lags)
+- [x] Q02-004 — Evaluar GATE 0A + GATE 0B, emitir veredicto y guardar reporte
+
+**Resultados clave**:
+  - HistGradientBoosting (3-class): f1=0.388, shuf_delta=+0.063, vsBH=+0.073 — señal débil pero real
+  - Binary BUY/SELL: TODOS los modelos fallan (shuf_delta negativo)
+  - Ridge(lags=5): r²=-0.02, dir_acc=49.7% — sin poder predictivo
+  - GATE 0A (signal existence): FRAGMENTARY PASS (solo 1/3 framings)
+  - GATE 0B (exploitability): FAIL
+
+---
+
+## 🚫 Q03 — Quant V2: Feature Audit [CANCELLED]
+
+> CANCELLED: CASO_B — no hay alpha económico para auditar features.
+> Post-sprint pipeline no activado per ROADMAP_QUANT_V2.md § Section A.
+
+- [-] Q03-001 — Calcular SHAP values en MetaModel
+- [-] Q03-002 — Permutation Importance de las 20 features
+- [-] Q03-003 — Mutual Information features vs target
+- [-] Q03-004 — Detectar multicolinealidad (VIF, correlaciones)
+
+---
+
+## 🚫 Q04 — Quant V2: New Features [CANCELLED]
+
+> CANCELLED: CASO_B. Feature space OHLCV+TA invalidado para trading predictivo.
+> Explorar alternatives datasources (order flow, funding rates, OI, on-chain).
+
+- [-] Q04-001 — Agregar retornos logarítmicos (1, 3, 6, 12, 24)
+- [-] Q04-002 — Agregar lags de close (1, 3, 6, 12)
+- [-] Q04-003 — Agregar volatilidad rolling (6, 12, 24) y z-scores
+- [-] Q04-004 — Agregar momentum (ROC 3, 6, 12) y regímenes
+- [-] Q04-005 — Agregar features cross-symbol (si hay datos multi-símbolo)
+
+---
+
+## 🚫 Q05 — Quant V2: Simple Baselines [CANCELLED]
+
+> CANCELLED: CASO_B. Modelos simples ya evaluados en el sprint.
+> LR, RF, HistGB y Ridge ejecutados. No mejora sustancial respecto al baseline.
+
+- [-] Q05-001 — Logistic Regression
+- [-] Q05-002 — Random Forest
+- [-] Q05-003 — LightGBM
+- [-] Q05-004 — XGBoost
+- [-] Q05-005 — CatBoost
+- [-] Q05-006 — Evaluar GATES 4, 5, 6 y decidir continuidad
+
+---
+
+## 🚫 Q06 — Quant V2: Alpha Validation [CANCELLED]
+
+> CANCELLED: CASO_B. Shuffle test y walk-forward ya integrados en el sprint.
+> Sin alpha económico para validar.
+
+- [-] Q06-001 — Shuffle labels test (10 seeds)
+- [-] Q06-002 — Walk Forward validation
+- [-] Q06-003 — Purged KFold
+- [-] Q06-004 — Combinatorial Purged CV
+
+---
+
+## 🚫 Q07 — Quant V2: Advanced Models [CANCELLED]
+
+> CANCELLED: CASO_B. Modelos avanzados prohibidos por diseño del sprint.
+> No hay alpha que justifique complejidad adicional.
+
+- [-] Q07-001 — GRU
+- [-] Q07-002 — TCN
+- [-] Q07-003 — Transformer temporal / TFT
+
+---
+
+## 🚫 Q08 — Quant V2: Loss Functions [CANCELLED]
+
+> CANCELLED: CASO_B. Sin alpha validado, loss tuning es prematuro.
+
+- [-] Q08-001 — Class weights
+- [-] Q08-002 — Focal Loss
+- [-] Q08-003 — Threshold tuning post-hoc
+- [-] Q08-004 — Probability calibration (Platt, Isotonic, temperature scaling)
+
+---
+
+## 🚫 Q09 — Quant V2: Realistic Backtest [CANCELLED]
+
+> CANCELLED: CASO_B. Backtest sin sentido sin señal explotable.
+
+- [-] Q09-001 — Implementar simulador con costos reales
+- [-] Q09-002 — Evaluar Sharpe, Sortino, Calmar, Max DD, Profit Factor
+- [-] Q09-003 — Probar distintas configs de SL/TP
+- [-] Q09-004 — Position sizing dinámico (riesgo 1%)
+- [-] Q09-005 — MCC direccional con costos
+
+---
+
+## 🚫 Q10 — Quant V2: Scaling [CANCELLED]
+
+> CANCELLED: CASO_B. Sin alpha en BTC, escalar es irrelevante.
+
+- [-] Q10-001 — Optimizar BTC/USDT hasta criterio de éxito global
+- [-] Q10-002 — Replicar a ETH, SOL
+- [-] Q10-003 — Replicar a DOGE, AVAX, XRP
+
+---
+
+## 🚫 QX — Quant V2: Temporal Audit [CANCELLED]
+
+> CANCELLED: CASO_B. Timeframes investigados como parte del sprint (1h).
+> Sin señal explotable, otros timeframes probablemente igual.
+
+- [-] QX-001 — Probar timeframes [15m, 30m, 1h, 4h, 1d]
+- [-] QX-002 — Probar lookbacks [20, 48, 72, 96, 168] horas
+- [-] QX-003 — Multi-timeframe features (1h + 4h + 1d)
+- [-] QX-004 — Señal por régimen de mercado (bull/bear, alta/baja volatilidad)
+- [-] QX-005 — Comparar 4 vs 6 vs 8 vs 10 años de histórico (solo BTC)

@@ -1,0 +1,30 @@
+name: "target-momentum-discrete"
+version: "0.1.0"
+description: "Target basado en momentum discreto con umbral configurable."
+
+data:
+  symbols: ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+  timeframe: "1h"
+  start: "2020-01-01"
+  end: "2026-06-01"
+
+target:
+  method: "momentum"
+  params:
+    lookahead: 5
+    thresholds: [0.005, 0.01, 0.015, 0.02]  # 0.5%, 1%, 1.5%, 2%
+  classes: ["BUY", "SELL", "HOLD"]
+
+features:
+  groups: ["ohlcv", "ta"]
+  lookback: 20
+
+model:
+  type: "lstm"
+  params:
+    layers: [128, 64, 32, 16]
+    dropout: 0.2
+
+evaluation:
+  metrics: ["f1_macro", "kappa", "mcc", "balanced_accuracy", "entropy", "shuffle_diff"]
+  gates: ["g1_signal_existence"]
