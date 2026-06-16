@@ -566,6 +566,22 @@ _Ninguno actualmente._
 - ✅ TASKS.md updated with H30-H39 entries and bitácora.
 - ✅ `dev` clean at `0862b1b` (base for all branches).
 
+### 2026-06-16 — Sesión Q02: Signal Validation Sprint — CASO_B
+- ✅ Roadmap cuantitativo V2 creado en `roadmaps/ROADMAP_QUANT_V2.md` con V3.1 Sprint structure (Secciones A/B/C, GATE 0A/0B, 3 framings, H0/H1)
+- ✅ 7 configs de experimentos en `roadmaps/configs/` (4 targets + 2 features + README)
+- ✅ Versiones bumped: data-engine 0.0.1→0.1.0, analytics-engine 0.0.1→0.1.0
+- ✅ Branch `feature/q02-signal-validation-sprint` creada desde `dev`, commit inicial pusheado
+- ✅ `experiments/sprint_runner.py` — sprint engine completo: 39049 velas BTC/USDT 1h via CCXT, 20 TA features, 4 modelos × 3 framings, walk-forward (4 folds), shuffle test (5 seeds)
+- ✅ Sprint ejecutado (236s): A_classification (HistGB delta=+0.063 ✅), B_binary (todos fallan ❌), C_regression (r²=-0.02 ❌)
+- ✅ `reports/sprint/sprint_report.json` + `sprint_summary.txt` generados
+- ✅ Veredicto: **CASO_B** — señal débil pero real, no explotable económicamente
+- ✅ GATE 0A: fragmentary PASS (solo HistGB en 3-class, delta=+0.063)
+- ✅ GATE 0B (exploitability): FAIL
+- ✅ Q03–QX cancelados per roadmap Sección C
+- ✅ TASKS.md: Q02 ✅, Q03–QX 🚫, total_tasks 98/98
+- ✅ PR abierto y mergeado a `dev` por el usuario
+- ✅ Branch `feature/q02-signal-validation-sprint` mergeada — pendiente borrar local + origin
+
 ### 2026-06-09 — Sesión H9: Telemetry Webhooks (merge a dev)
 - ✅ PR mergeado a `dev` por el usuario.
 - ✅ Rama `feature/h6-telemetry-webhooks` borrada (local + origin).
