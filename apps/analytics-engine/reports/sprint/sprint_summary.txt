@@ -1,0 +1,65 @@
+SIGNAL VALIDATION SPRINT — RESULTS
+===================================
+Date: 2026-06-16
+Data: BTC/USDT 1h, 39049 candles (2022-01-01 to 2026-06-16)
+Features: 20 (OHLCV + TA: RSI, EMA9/21/50, MACD, BB, ATR, ADX, OBV, VolSMA, PctChg)
+Models: LogisticRegression, RandomForest(max_depth=7), HistGradientBoosting, Ridge(lags=5)
+Framings: A=3-class (BUY/HOLD/SELL), B=2-class (BUY/SELL), C=regression (future return)
+Validation: Walk-forward (4 folds, expanding) + shuffle-label test (5 seeds)
+Normalization: Returns adjusted by rolling volatility (window=60)
+
+RESULTS BY FRAMING
+------------------
+
+FRAMING A (Classification: BUY=2, HOLD=1, SELL=0)
+  LogisticRegression:   f1=0.293, shuf_delta=-0.042, vsBH=-0.022  ✗
+  RandomForest:         f1=0.324, shuf_delta=-0.137, vsBH=+0.009  ✗
+  HistGradientBoosting: f1=0.388, shuf_delta=+0.063, vsBH=+0.073  ✓ (weak)
+  GATE 0A: PASSED  (best: HistGradientBoosting, delta=+0.063)
+
+FRAMING B (Binary: BUY vs SELL, hold threshold=0.2%)
+  LogisticRegression:   acc=0.515, f1=0.500, shuf_delta=-0.005  ✗
+  RandomForest:         acc=0.503, f1=0.445, shuf_delta=-0.161  ✗
+  HistGradientBoosting: acc=0.507, f1=0.462, shuf_delta=-0.088  ✗
+  GATE 0A: FAILED
+
+FRAMING C (Regression: future adj log return, Ridge with 5 lags)
+  Ridge(lags=5): r²=-0.020, dir_acc=0.497, shuf_delta=-0.009  ✗
+  GATE 0A: FAILED
+
+VERDICT: CASO_B
+──────────────
+
+"Señal débil detectada (delta=0.0631, best=A_classification/HistGradientBoosting).
+Consistente pero no explotable económicamente sin mejora sustancial."
+
+GATE 0A (signal existence):  FRAGMENTARY PASS — only 1 of 3 framings shows signal
+GATE 0B (exploitability):     FAIL — no economically meaningful signal found
+
+KEY INSIGHTS
+─────────────
+1. HistGradientBoosting shows weak but real signal in 3-class framing (delta=+0.063).
+   This confirms the earlier audit's finding of "shuffle test passes weakly."
+2. The signal disappears entirely when forced to binary BUY/SELL decision (Framing B).
+   → The model can tell WHEN to hold but not WHICH direction.
+3. Ridge regression with lags shows no predictive power (r² ≈ 0, dir_acc ≈ 50%).
+4. HOLD class dominates predictions (avg 5302/7809 samples), suggesting the model
+   learned that "don't trade" is the safest prediction.
+5. LR and RF show negative shuffle_delta = worse than noise.
+
+H0 REJECTION: PARTIAL
+- H0 (no signal at all): rejected for HistGB in 3-class framing
+- H1 (weak consistent signal): confirmed, but CASO_B constraints apply
+- Economic exploitability: cannot be activated without substantial improvement
+
+NEXT STEPS (per ROADMAP_QUANT_V2.md Section C)
+────────────
+1. Report signal as "CASO_B — débil, no explotable"
+2. Do NOT activate post-sprint pipeline (Sección B)
+3. Explore alternative datasources:
+   - Order flow (taker buy/sell volume)
+   - Funding rates
+   - Open interest
+   - On-chain metrics
+4. Consider higher timeframe (4h/1d) or different symbols
+5. Current feature space (OHLCV+TA in 1h) is INVALID for predictive trading
