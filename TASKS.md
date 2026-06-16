@@ -1,7 +1,7 @@
 ---
 project: argos-bot
-total_tasks: 98
-completed: 98
+total_tasks: 112
+completed: 112
 in_progress: 0
 blocked: 0
 overall_pct: 100
@@ -51,6 +51,7 @@ last_updated: 2026-06-16
 | Q09   | Quant V2 — Realistic BTest    | 🚫     | 0%     | 0/5    |
 | Q10   | Quant V2 — Scaling            | 🚫     | 0%     | 0/3    |
 | QX    | Quant V2 — Temporal Audit     | 🚫     | 0%     | 0/5    |
+| S01   | Additional Data Sources       | ✅     | 100%   | 14/14  |
 
 ---
 
@@ -459,6 +460,45 @@ _Ninguno actualmente._
 
 ---
 
+---
+
+## ✅ S01 — Additional Data Sources (Roadmap Sección C)
+
+> Pipeline end-to-end para funding rates, open interest, order flow y multi-timeframe alignment.
+> Data-engine publica a Redis streams; analytics-engine consume y computa features derivadas.
+
+### Data-engine (TypeScript/NestJS)
+
+- [x] S01-001 — Domain VOs: `FundingRate`, `OpenInterest`, `AggTrade` (immutable, create/toJSON/fromJSON)
+- [x] S01-002 — ExchangeGateway port: callbacks opcionales `onFundingRate?` y `onAggTrade?`
+- [x] S01-003 — BinanceWebSocketAdapter: parsea `markPriceUpdate` y `aggTrade` del stream combinado
+- [x] S01-004 — BinanceRestPoller: REST poll `fapi/v1/openInterest` cada 60s por símbolo
+- [x] S01-005 — IngestAdditionalDataUseCase: publica a `funding:<symbol>`, `oi:<symbol>`, `orderflow:<symbol>`
+- [x] S01-006 — MessageBus.publishRaw() para datos arbitrarios
+- [x] S01-007 — TickPipelineService + AppModule: wiring completo con all callbacks + OI poller
+
+### Analytics-engine (Python/FastAPI)
+
+- [x] S01-008 — Domain VOs: `FundingRate`, `OpenInterest`, `AggTrade` (Python frozen dataclasses)
+- [x] S01-009 — AdditionalDataConsumer: 3 async XREAD consumers (funding/oi/orderflow) + features derivadas (funding momentum, OI change %, order flow imbalance)
+- [x] S01-010 — MultiTimeframeAligner: downsampling 1h→4h/1d, TA indicators, forward-fill a 1h alignment
+- [x] S01-011 — API endpoints: `GET /features/additional` y `GET /features/additional/{symbol}`
+- [x] S01-012 — Wired into main.py lifespan
+
+### Validación
+
+- [x] S01-013 — TypeScript: tsc --noEmit, eslint, jest (18 tests) ✅
+- [x] S01-014 — Python: pytest 483 passed, 1 skipped; arch_lint PASS; secret_scan clean ✅
+
+**Progreso**: 14/14 = **100%**
+**Dependencias**: H1 (tick pipeline / MessageBus), H8–H12 (candle building patterns)
+**Notas**:
+- Funding rates vía `!markPrice@arr@1s` — un solo stream para todos los símbolos
+- Open Interest vía REST poll (Binance no expone OI por WS)
+- AggTrades publicados individualmente; agregación a imbalance en analytics-engine
+- Multi-timeframe indicators computados offline (no en tiempo real)
+- On-chain y cross-exchange spreads diferidos (requieren APIs externas)
+
 ## Bitácora
 
 ### 2026-06-07 — Sesión H5: Secrets & Env Mode
@@ -581,6 +621,14 @@ _Ninguno actualmente._
 - ✅ TASKS.md: Q02 ✅, Q03–QX 🚫, total_tasks 98/98
 - ✅ PR abierto y mergeado a `dev` por el usuario
 - ✅ Branch `feature/q02-signal-validation-sprint` mergeada — pendiente borrar local + origin
+
+### 2026-06-16 — Sesión S01: Additional Data Sources end-to-end
+- ✅ Data-engine: FundingRate, OpenInterest, AggTrade VOs + ExchangeGateway extendido + BinanceWebSocketAdapter (markPriceUpdate/aggTrade) + BinanceRestPoller (OI) + IngestAdditionalDataUseCase + TickPipelineService wiring + MessageBus.publishRaw()
+- ✅ Analytics-engine: Python VOs + AdditionalDataConsumer (3 XREAD streams + order flow aggregation + feature methods) + MultiTimeframeAligner (4h/1d TA indicators → 1h alignment)
+- ✅ API: GET /features/additional y /features/additional/{symbol}
+- ✅ Validación: tsc --noEmit, eslint, jest (18/18), pytest (483/483, 1 skipped), arch_lint, secret_scan
+- ✅ PR mergeado directamente a `main` (usuario), luego `dev` sincronizado con `main`
+- 🚫 On-chain metrics y cross-exchange spreads: no implementados (requieren APIs externas)
 
 ### 2026-06-09 — Sesión H9: Telemetry Webhooks (merge a dev)
 - ✅ PR mergeado a `dev` por el usuario.
