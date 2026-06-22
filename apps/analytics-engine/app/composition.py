@@ -23,6 +23,7 @@ import ccxt.async_support as ccxt
 import structlog
 
 from fastapi import Request
+from pathlib import Path
 
 from .application.ports.multi_symbol_consolidator import (
     MultiSymbolConsolidator,
@@ -171,10 +172,21 @@ from .infrastructure.training.walk_forward_runner_impl import SimpleWalkForwardR
 if TYPE_CHECKING:
     import pandas as pd
     from fastapi import Request
+    from .infrastructure.trading.candle_builder import CandleBuffer, CandleBuilder
+    from .infrastructure.trading.streaming_inference import StreamingInferencePipeline
+    from .infrastructure.trading.streaming_signal_processor import StreamingSignalProcessor
 
 log = structlog.get_logger()
 
 OhlcvSource = Callable[[str, str, int], Awaitable["pd.DataFrame"]]
+
+
+@dataclass
+class StreamingComponents:
+    candle_builder: "CandleBuilder"
+    candle_buffer: "CandleBuffer"
+    inference_pipeline: "StreamingInferencePipeline"
+    signal_processor: "StreamingSignalProcessor"
 
 
 @dataclass
@@ -198,6 +210,12 @@ class Composition:
     notify_on_event: NotifyOnEventUseCase
     execution_gate: ExecutionGate | None = None
     trading_engine: TradingEngine | None = None
+    streaming: StreamingComponents | None = None
+    position_repo: PositionRepository | None = None
+    system_snapshot_repo: Any | None = None
+    stream_barrier: Any | None = None
+    idempotency_store: Any | None = None
+    drift_watchdog: Any | None = None
 
 
 def _env_mode() -> str:
@@ -416,12 +434,26 @@ def build_composition() -> Composition:
     if mode == "BACKTESTING":
         trade_journal: TradeJournal = InMemoryTradeJournal()
         snapshot_repo: DrawdownSnapshotRepo = InMemorySnapshotRepo()
+        position_repo: PositionRepository = InMemoryPositionRepository()
+        system_snapshot_repo: Any = None
     else:
-        # PAPER/LIVE use the same in-memory adapters for the journal
-        # + snapshot (persistent stores are H3-FU1). The order
-        # client and env-mode writer differ.
         trade_journal = InMemoryTradeJournal()
         snapshot_repo = InMemorySnapshotRepo()
+        position_repo = InMemoryPositionRepository()
+        system_snapshot_repo = None
+
+    # Stream barrier + idempotency (Fase 1 backpressure)
+    if mode == "BACKTESTING":
+        from .domain.recovery.stream_barrier import StreamConsumptionBarrier
+        stream_barrier: StreamConsumptionBarrier | None = None
+        idempotency_store: Any = None
+    else:
+        from .domain.recovery.stream_barrier import StreamConsumptionBarrier
+        from .infrastructure.repositories.idempotency_store import (
+            SQLiteExecutionIdempotencyStore,
+        )
+        stream_barrier = StreamConsumptionBarrier()
+        idempotency_store = SQLiteExecutionIdempotencyStore()
 
     env_writer: EnvironmentModeWriter = FileEnvironmentModeWriter()
     (
@@ -464,6 +496,58 @@ def build_composition() -> Composition:
         notifier = CompositeNotifier(channels)
     notify_on_event_uc = NotifyOnEventUseCase(notifier=notifier)
 
+    # Drift watchdog (PAPER/LIVE only)
+    if mode == "BACKTESTING":
+        drift_watchdog: Any = None
+    else:
+        from .application.services.drift_watchdog import LiveDriftWatchdog
+        from .infrastructure.exchange.ccxt_position_provider import (
+            CcxtExchangePositionProvider,
+        )
+        if exchange is not None:
+            exchange_provider = CcxtExchangePositionProvider(
+                exchange=exchange,
+                symbols=(os.environ.get("SYMBOL", "BTC/USDT"),),
+            )
+            drift_watchdog = LiveDriftWatchdog(
+                position_repo=position_repo,
+                exchange_provider=exchange_provider,
+                trade_journal=trade_journal,
+                check_interval_seconds=300.0,
+                equity_provider=CcxtBalanceProvider(exchange) if mode != "BACKTESTING" else None,
+            )
+        else:
+            drift_watchdog = None
+
+    # Streaming inference components (PAPER/LIVE only)
+    if mode == "BACKTESTING":
+        streaming: StreamingComponents | None = None
+    else:
+        from .infrastructure.trading.candle_builder import CandleBuilder, CandleBuffer
+        from .infrastructure.trading.streaming_inference import StreamingInferencePipeline
+        from .infrastructure.trading.streaming_signal_processor import (
+            StreamingSignalProcessor,
+        )
+        from .infrastructure.exchange.funding_rate_provider import FundingRateProvider
+        symbol = os.environ.get("SYMBOL", "BTC/USDT")
+        models_dir = Path(__file__).resolve().parent.parent / "models"
+        funding_provider = FundingRateProvider(exchange) if exchange else None
+        candle_builder = CandleBuilder(symbol=symbol, timeframe_seconds=3600)
+        candle_buffer = CandleBuffer(maxlen=2000)
+        inference_pipeline = StreamingInferencePipeline(
+            symbol=symbol,
+            inference_timeframe="1h",
+            checkpoint_base=models_dir,
+            additional_feature_provider=funding_provider,
+        )
+        signal_processor = StreamingSignalProcessor(symbol=symbol)
+        streaming = StreamingComponents(
+            candle_builder=candle_builder,
+            candle_buffer=candle_buffer,
+            inference_pipeline=inference_pipeline,
+            signal_processor=signal_processor,
+        )
+
     return Composition(
         compute_position_size=compute_position_size,
         check_drawdown=check,
@@ -483,6 +567,12 @@ def build_composition() -> Composition:
         notifier=notifier,
         notify_on_event=notify_on_event_uc,
         execution_gate=gate,
+        streaming=streaming,
+        position_repo=position_repo,
+        system_snapshot_repo=system_snapshot_repo,
+        stream_barrier=stream_barrier,
+        idempotency_store=idempotency_store,
+        drift_watchdog=drift_watchdog,
     )
 
 
