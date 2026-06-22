@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from ...domain.recovery.reconciliation_engine import ReconciliationSummary
 from ...domain.value_objects.execution_signal import ExecutionSignal
 
 
@@ -16,5 +17,9 @@ class GateVerdict:
 @runtime_checkable
 class ExecutionGate(Protocol):
 
-    async def evaluate(self, signal: ExecutionSignal) -> GateVerdict:
+    async def evaluate(
+        self,
+        signal: ExecutionSignal,
+        reconciliation: ReconciliationSummary | None = None,
+    ) -> GateVerdict:
         ...
