@@ -133,6 +133,7 @@ from .infrastructure.trading.ccxt_binance_adapter import (
 )
 from .infrastructure.trading.execution_gate import SourceExecutionGate
 from .infrastructure.trading.trading_engine import LiveTradingEngine
+from .infrastructure.repositories.idempotency_store import SQLiteExecutionIdempotencyStore
 from .domain.value_objects.atr import Atr
 from .infrastructure.indicators.ta_atr_calculator import TaAtrCalculator
 from .infrastructure.backtest.file_reporter import FileBacktestReporter
@@ -1057,6 +1058,11 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
     position_repo = get_position_repo(request)
     execution_logger = StructlogExecutionLogger()
 
+    if comp.mode == "BACKTESTING":
+        idempotency_store = None
+    else:
+        idempotency_store = SQLiteExecutionIdempotencyStore()
+
     use_case = ExecuteSignalUseCase(
         signal_validator=validator,
         balance_provider=balance_provider,
@@ -1065,6 +1071,7 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
         position_repo=position_repo,
         execution_logger=execution_logger,
         is_halted=drawdown_checker,
+        idempotency_store=idempotency_store,
     )
     request.app.state.execute_signal_usecase = use_case
     return use_case
