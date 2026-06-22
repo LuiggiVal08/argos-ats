@@ -63,9 +63,12 @@ class LivePosition:
     closed_at: datetime | None = None
     realized_pnl: Decimal | None = None
     status: str = "OPEN"
+    lineage_id: str = ""
+    sl_order_id: str | None = None
+    tp_order_id: str | None = None
     metadata: dict = field(default_factory=dict)
 
-    VALID_STATUSES = ("OPEN", "PARTIALLY_CLOSED", "CLOSED", "SL_HIT", "TP_HIT")
+    VALID_STATUSES = ("OPEN", "PARTIALLY_CLOSED", "CLOSED", "SL_HIT", "TP_HIT", "CRITICAL_UNPROTECTED")
 
     def __post_init__(self) -> None:
         if self.units <= 0:
