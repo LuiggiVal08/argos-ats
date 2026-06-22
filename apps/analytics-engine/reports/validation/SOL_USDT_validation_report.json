@@ -1,0 +1,98 @@
+{
+  "symbol": "SOL/USDT",
+  "version": "v1.0.1781551368",
+  "meta_accuracy": 0.49831233658188734,
+  "n_predictions": 28032,
+  "timestamp": "2026-06-15T21:43:14.124486+00:00",
+  "checks": {
+    "class_distribution": {
+      "status": "PASS",
+      "counts": {
+        "BUY": 6667,
+        "SELL": 7449,
+        "HOLD": 13916
+      },
+      "percentages": {
+        "BUY": 0.2378,
+        "SELL": 0.2657,
+        "HOLD": 0.4964
+      }
+    },
+    "confusion_matrix": {
+      "status": "WARNING",
+      "matrix": [
+        [
+          291,
+          233,
+          6143
+        ],
+        [
+          248,
+          343,
+          6858
+        ],
+        [
+          138,
+          90,
+          13688
+        ]
+      ],
+      "labels": [
+        "BUY",
+        "SELL",
+        "HOLD"
+      ],
+      "precision": {
+        "BUY": 0.4298,
+        "SELL": 0.515,
+        "HOLD": 0.5129
+      },
+      "recall": {
+        "BUY": 0.0436,
+        "SELL": 0.046,
+        "HOLD": 0.9836
+      },
+      "f1": {
+        "BUY": 0.0792,
+        "SELL": 0.0845,
+        "HOLD": 0.6742
+      },
+      "accuracy": 0.5109,
+      "avg_f1": 0.2793
+    },
+    "probability_stats": {
+      "status": "PASS",
+      "mean_probs": [
+        0.2317,
+        0.263,
+        0.5053
+      ],
+      "std_probs": [
+        0.075,
+        0.0526,
+        0.1183
+      ]
+    },
+    "confidence": {
+      "mean": 0.5098,
+      "std": 0.1115,
+      "p95": 0.7362
+    },
+    "accuracy_by_confidence": {
+      "regimes": {
+        "LOW_CONFIDENCE": {
+          "count": 3732,
+          "accuracy": 0.3272
+        },
+        "MID_CONFIDENCE": {
+          "count": 18641,
+          "accuracy": 0.4684
+        },
+        "HIGH_CONFIDENCE": {
+          "count": 5659,
+          "accuracy": 0.772
+        }
+      }
+    }
+  }
+}

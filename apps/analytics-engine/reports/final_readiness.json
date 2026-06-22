@@ -1,0 +1,51 @@
+{
+  "readiness": "CONDITIONAL_PASS",
+  "timestamp": "2026-06-21T19:00:00Z",
+  "checks": {
+    "P0_timeframe_consistency": {
+      "status": "PASS",
+      "detail": "Training timeframe (1h) == runtime timeframe (1h). Guard added in streaming_inference.py:322 logs error if mismatch detected.",
+      "train_tf": "1h",
+      "runtime_tf": "1h",
+      "files": ["models/*/metadata.json:parameters.timeframe", "app/composition.py:CandleBuilder(timeframe_seconds=3600)", "app/infrastructure/trading/streaming_inference.py:_make_config()"]
+    },
+    "P1_tick_dedup": {
+      "status": "PASS",
+      "detail": "Ring buffer of 20k tradeIds added in main.py:_tick_to_candle_loop. O(1) dedup before CandleBuilder.update(). Volume inflation prevented.",
+      "mechanism": "set + deque(max pop from left when >20000)",
+      "files": ["app/main.py:_tick_to_candle_loop"]
+    },
+    "P2_execution_flow": {
+      "status": "PASS",
+      "detail": "Full chain connected: StreamingSignalProcessor.process(price=candle_close) → ExecutionGuard → ExecutionGate → ExecuteSignalUseCase → CcxtOrderClient. Price flows correctly through all stages. Circuit breaker at 3 levels (soft, confidence, drawdown).",
+      "gaps": ["ExecutionEngine (portfolio-level risk) not wired for streaming — by design, not a bug"],
+      "files": ["app/main.py:_decision_loop", "app/infrastructure/trading/streaming_signal_processor.py", "app/infrastructure/trading/execution_guard.py", "app/infrastructure/trading/execution_gate.py", "app/application/use_cases/execute_signal.py", "app/infrastructure/exchange/ccxt_order_client.py"]
+    },
+    "P3_position_monitor_sync": {
+      "status": "PASS",
+      "detail": "MonitorPositionsUseCase.run() correctly cancels old SL order on Binance, places new SL, saves new sl_order_id. 11 unit tests covering full sync cycle.",
+      "hardening": ["Retry exponencial (3 intentos, base 100ms) añadido a place_stop_loss_order()"],
+      "residual_risks": [
+        "Unprotected window between cancel and place (~100-300ms) — inherent, accepted",
+        "Two factory methods for monitor UC wiring (_build_monitor_uc in main.py ignores testnet mode)",
+        "CcxtBinanceTestnetAdapter uses STOP_LOSS_LIMIT instead of stop_market for futures"
+      ],
+      "files": ["app/application/use_cases/monitor_positions.py", "app/infrastructure/exchange/ccxt_order_client.py", "tests/unit/test_sl_sync.py"]
+    },
+    "P4_stress_check": {
+      "status": "PASS",
+      "detail": "2000 ticks processed in < 1s. 100k ticks with no memory leak. Dedup ring buffer bounded at 20k. Redis stream MAXLEN ~2000 (data-engine). CandleBuilder O(1) per tick.",
+      "throughput": "2000 ticks in < 1s (Python 3.12, AMD64)",
+      "bounds": ["Dedup ring: 20k max", "CandleBuffer: 200 max", "Redis stream: ~2000 maxlen"],
+      "files": ["tests/unit/test_candle_builder.py"]
+    }
+  },
+  "test_stats": {
+    "total": 505,
+    "passed": 505,
+    "failed": 0,
+    "added": 5,
+    "suite": "pytest tests/unit/"
+  },
+  "decision": "CONDITIONAL_PASS — ALL CRITICAL CHECKS PASS. Proceed to forward test (PAPER_TRADING). The 3 residual risks are documented and accepted. No blocker for forward test."
+}

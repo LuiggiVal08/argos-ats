@@ -1,0 +1,98 @@
+{
+  "symbol": "XRP/USDT",
+  "version": "v1.0.1781553434",
+  "meta_accuracy": 0.5075826004278583,
+  "n_predictions": 28032,
+  "timestamp": "2026-06-15T21:43:14.159613+00:00",
+  "checks": {
+    "class_distribution": {
+      "status": "PASS",
+      "counts": {
+        "BUY": 6863,
+        "SELL": 7551,
+        "HOLD": 13618
+      },
+      "percentages": {
+        "BUY": 0.2448,
+        "SELL": 0.2694,
+        "HOLD": 0.4858
+      }
+    },
+    "confusion_matrix": {
+      "status": "FAIL",
+      "matrix": [
+        [
+          12,
+          62,
+          6789
+        ],
+        [
+          4,
+          29,
+          7518
+        ],
+        [
+          14,
+          10,
+          13594
+        ]
+      ],
+      "labels": [
+        "BUY",
+        "SELL",
+        "HOLD"
+      ],
+      "precision": {
+        "BUY": 0.4,
+        "SELL": 0.2871,
+        "HOLD": 0.4872
+      },
+      "recall": {
+        "BUY": 0.0017,
+        "SELL": 0.0038,
+        "HOLD": 0.9982
+      },
+      "f1": {
+        "BUY": 0.0034,
+        "SELL": 0.0075,
+        "HOLD": 0.6548
+      },
+      "accuracy": 0.4864,
+      "avg_f1": 0.2219
+    },
+    "probability_stats": {
+      "status": "PASS",
+      "mean_probs": [
+        0.2355,
+        0.278,
+        0.4865
+      ],
+      "std_probs": [
+        0.045,
+        0.0343,
+        0.0695
+      ]
+    },
+    "confidence": {
+      "mean": 0.4867,
+      "std": 0.0693,
+      "p95": 0.6038
+    },
+    "accuracy_by_confidence": {
+      "regimes": {
+        "LOW_CONFIDENCE": {
+          "count": 2666,
+          "accuracy": 0.2701
+        },
+        "MID_CONFIDENCE": {
+          "count": 23777,
+          "accuracy": 0.4911
+        },
+        "HIGH_CONFIDENCE": {
+          "count": 1589,
+          "accuracy": 0.7791
+        }
+      }
+    }
+  }
+}

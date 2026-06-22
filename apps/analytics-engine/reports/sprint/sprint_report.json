@@ -747,6 +747,6 @@
   },
   "verdict": "CASO_B",
   "verdict_reason": "Se\u00f1al d\u00e9bil detectada (delta=0.0631, best=A_classification/HistGradientBoosting). Consistente pero no explotable econ\u00f3micamente sin mejora sustancial.",
-  "run_timestamp": "2026-06-16T02:28:23.579915+00:00",
-  "elapsed_seconds": 236.6470067501068
+  "run_timestamp": "2026-06-16T05:16:58.995478+00:00",
+  "elapsed_seconds": 219.29220247268677
 }

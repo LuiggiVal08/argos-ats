@@ -1,0 +1,57 @@
+{
+  "results": [
+    {
+      "label": "1x (baseline)",
+      "fee": 0.001,
+      "slippage": 0.0005,
+      "spread": 0.0001,
+      "n_trades": 186,
+      "win_rate": 0.7688172043010753,
+      "total_return_pct": 93.17902784810434,
+      "sharpe": 6.498275826946203,
+      "max_dd_pct": 2.7235693942485355,
+      "calmar": 34.335150564159854,
+      "profit_factor": 4.568006636573801,
+      "sortino": 1.7364687760172846,
+      "cagr": 93.5141652234611,
+      "expectancy": 50.09625153123878,
+      "turnover_per_day": 0.5109305253519515
+    },
+    {
+      "label": "2x (stress)",
+      "fee": 0.002,
+      "slippage": 0.001,
+      "spread": 0.0002,
+      "n_trades": 187,
+      "win_rate": 0.5294117647058824,
+      "total_return_pct": 19.055691641810313,
+      "sharpe": 1.860879362282069,
+      "max_dd_pct": 9.181776660693878,
+      "calmar": 2.081336826284604,
+      "profit_factor": 1.4357894474584108,
+      "sortino": 0.41095170534342723,
+      "cagr": 19.110369894622647,
+      "expectancy": 10.190209434123235,
+      "turnover_per_day": 0.5136774636602953
+    },
+    {
+      "label": "3x (extreme)",
+      "fee": 0.003,
+      "slippage": 0.0015,
+      "spread": 0.0003,
+      "n_trades": 188,
+      "win_rate": 0.3723404255319149,
+      "total_return_pct": -28.196133343803965,
+      "sharpe": -3.020776468167519,
+      "max_dd_pct": 33.810813144976656,
+      "calmar": -0.8357893134065569,
+      "profit_factor": 0.5460114653693813,
+      "sortino": -0.6130424021603632,
+      "cagr": -28.258716304157428,
+      "expectancy": -14.997943267980853,
+      "turnover_per_day": 0.5164244019686391
+    }
+  ],
+  "pass": false,
+  "elapsed_seconds": 31.623655080795288
+}
