@@ -6,6 +6,8 @@ export interface ExchangeInfo {
   reconnectAttempt: number
   totalReconnects: number
   connectedAt: number | null
+  pendingTicks?: number
+  droppedTicks?: number
 }
 
 export interface ExchangeGateway {

@@ -67,7 +67,7 @@ export class FeaturePipelineService implements OnModuleInit, OnModuleDestroy {
       this.timer = null
     }
     if (this.client) {
-      try { await this.client.quit() } catch { this.client.disconnect() }
+      try { await this.client.quit() } catch { log("[feature-pipeline] redis quit failed"); this.client.disconnect() }
       this.client = null
     }
     log("shutdown")

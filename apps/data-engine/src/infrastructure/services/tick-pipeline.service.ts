@@ -28,6 +28,7 @@ const PREFIX = process.env.STREAM_PREFIX ?? "ticks:"
 @Injectable()
 export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
   private pollHandle: NodeJS.Timeout | null = null
+  private flushHandle: NodeJS.Timeout | null = null
 
   constructor(
     @Inject(EXCHANGE_GATEWAY)
@@ -48,6 +49,9 @@ export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
     this.pollHandle = setInterval(() => {
       void this.monitorUc.tick()
     }, 1000)
+    this.flushHandle = setInterval(() => {
+      void this.flushPeriodic()
+    }, 30_000)
 
     try {
       await this.exchange.start(async (tick) => {
@@ -62,11 +66,24 @@ export class TickPipelineService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async flushPeriodic(): Promise<void> {
+    if (this.tickBuffer.size() === 0) return
+    try {
+      await this.flush.execute()
+    } catch (e) {
+      log(`[pipeline] periodic flush error: ${(e as Error).message}`)
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
     log("[pipeline] shutting down")
     if (this.pollHandle) {
       clearInterval(this.pollHandle)
       this.pollHandle = null
+    }
+    if (this.flushHandle) {
+      clearInterval(this.flushHandle)
+      this.flushHandle = null
     }
 
     const drained = this.tickBuffer.size()

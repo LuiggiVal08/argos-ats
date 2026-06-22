@@ -1,7 +1,7 @@
 import { Controller, Get, Inject } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { BUS, EXCHANGE_GATEWAY } from "../config/tokens"
-import { RedisProtocolBus } from "../messaging/redis-protocol-bus"
+import { MessageBus } from "../../application/ports/message-bus.port"
 import { ExchangeGateway } from "../../application/ports/exchange-gateway.port"
 
 const STALE_TICK_MS = 10_000
@@ -10,7 +10,7 @@ const STALE_TICK_MS = 10_000
 export class HealthController {
   constructor(
     private readonly config: ConfigService,
-    @Inject(BUS) private readonly bus: RedisProtocolBus,
+    @Inject(BUS) private readonly bus: MessageBus,
     @Inject(EXCHANGE_GATEWAY)
     private readonly exchange: ExchangeGateway,
   ) {}

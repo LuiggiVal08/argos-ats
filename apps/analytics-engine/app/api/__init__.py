@@ -9,6 +9,7 @@ from .notification import notification_router
 from .order import router as order_router
 from .observability import router as observability_router
 from .risk import router as risk_router
+from .shadow import router as shadow_router
 from .training import router as training_router
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     "order_router",
     "observability_router",
     "risk_router",
+    "shadow_router",
     "training_router",
 ]

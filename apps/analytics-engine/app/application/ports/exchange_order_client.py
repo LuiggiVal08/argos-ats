@@ -91,6 +91,24 @@ class ExchangeOrderClient(Protocol):
         place_emergency_market to liquidate the position."""
         ...
 
+    async def cancel_order(self, order_id: str, symbol: str) -> bool:
+        """Cancel a single order by its exchange ID.
+        Returns True if the order was cancelled, False if already gone.
+        Raises ExchangeOrderClientError on infrastructure failure."""
+        ...
+
+    async def place_stop_loss_order(
+        self,
+        symbol: str,
+        side: OrderSide,
+        amount: Decimal,
+        stop_price: Decimal,
+    ) -> OrderResult:
+        """Place a standalone stop loss (stop_market) order.
+        Used to replace SL during break-even / trail updates.
+        Raises ExchangeOrderClientError on placement failure."""
+        ...
+
     async def place_emergency_market(
         self, symbol: str, side: OrderSide, amount: Decimal
     ) -> OrderResult:

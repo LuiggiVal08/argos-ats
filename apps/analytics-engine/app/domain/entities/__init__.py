@@ -2,6 +2,7 @@
 from .backtest_engine import BacktestEngine, BacktestError
 from .correlation_engine import CorrelationEngine
 from .market_context import MarketContext
+from .multi_timeframe_aligner import MultiTimeframeAligner, MultiTimeframeAlignmentError
 from .nova_quant_model import (
     FeatureMismatchError,
     ModelVersionMismatchError,
@@ -48,6 +49,8 @@ __all__ = [
     "BacktestError",
     "CorrelationEngine",
     "MarketContext",
+    "MultiTimeframeAligner",
+    "MultiTimeframeAlignmentError",
     "PortfolioDecision",
     "PortfolioManager",
     "PortfolioState",

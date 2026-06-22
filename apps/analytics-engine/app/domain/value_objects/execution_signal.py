@@ -18,6 +18,8 @@ class ExecutionSignal:
 
     Attributes:
         signal_id:    ID único para deduplicación.
+        lineage_id:   GlobalEventChainID — todos los eventos derivados
+                      comparten este ID (Fix 2).
         side:         Dirección (BUY/SELL — nunca HOLD).
         confidence:   Confianza post-validación (threshold aplicado).
         symbol:       Par a operar (ej. BTC/USDT).
@@ -31,6 +33,7 @@ class ExecutionSignal:
     confidence: float
     symbol: str
     signal_id: str = field(default_factory=lambda: uuid4().hex[:12])
+    lineage_id: str = ""
     strategy_id: str = ""
     price: Decimal | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

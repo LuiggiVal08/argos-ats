@@ -56,6 +56,7 @@ export class RecoverCandleUseCase {
       return { recovered: incomplete, discarded: false }
     } catch {
       this.store.remove(symbol, timeframe)
+      console.warn(`[recover] failed to recover candle ${symbol} ${timeframe}`)
       return { recovered: null, discarded: true }
     }
   }

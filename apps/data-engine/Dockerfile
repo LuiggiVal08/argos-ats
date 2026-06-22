@@ -1,19 +1,21 @@
-FROM node:20-alpine AS builder
+FROM node:24-slim
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --ignore-scripts
-COPY tsconfig.json nest-cli.json ./
-COPY src/ src/
-RUN npm run build
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-RUN addgroup --system argos && adduser --system --ingroup argos argos && \
+RUN groupadd --system argos && useradd --system --gid argos argos && \
     mkdir -p /app/data && chown argos:argos /app/data
-COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
-COPY --from=builder /app/dist dist/
+
+COPY apps/data-engine/package*.json apps/data-engine/tsconfig.json apps/data-engine/nest-cli.json apps/data-engine/
+RUN cd apps/data-engine && npm ci --ignore-scripts
+
+# better-sqlite3 has no prebuilt for musl; copy host-compiled binary
+COPY apps/data-engine/node_modules/better-sqlite3/build/Release/better_sqlite3.node \
+    apps/data-engine/node_modules/better-sqlite3/build/Release/
+
+COPY apps/data-engine/src/ apps/data-engine/src/
+COPY contracts/ contracts/
+RUN cd apps/data-engine && npm run build && npm prune --omit=dev
+
 USER argos
 EXPOSE 3000
 ENV NODE_ENV=production
-CMD ["node", "dist/main.js"]
+CMD ["node", "apps/data-engine/dist/main.js"]

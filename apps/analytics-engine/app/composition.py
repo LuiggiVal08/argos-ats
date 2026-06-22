@@ -17,13 +17,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 import ccxt.async_support as ccxt
 import structlog
 
 from fastapi import Request
-from pathlib import Path
 
 from .application.ports.multi_symbol_consolidator import (
     MultiSymbolConsolidator,
@@ -57,8 +57,7 @@ from .application.ports.model_trainer import ModelTrainer
 from .application.ports.notifier import Notifier
 from .application.ports.incident_repository import IncidentRepository
 from .application.ports.position_repository import PositionRepository
-from .application.ports.execution_gate import ExecutionGate
-from .application.ports.trading_engine import TradingEngine
+from .application.ports.execution_idempotency import ExecutionIdempotencyStore
 from .application.use_cases.check_drawdown import CheckDrawdownUseCase
 from .application.use_cases.build_dataset import BuildDatasetUseCase
 from .application.use_cases.collect_telemetry import (
@@ -132,9 +131,6 @@ from .infrastructure.exchange.ccxt_order_client import CcxtOrderClient
 from .infrastructure.trading.ccxt_binance_adapter import (
     CcxtBinanceTestnetAdapter,
 )
-from .infrastructure.trading.execution_gate import SourceExecutionGate
-from .infrastructure.trading.trading_engine import LiveTradingEngine
-from .infrastructure.repositories.idempotency_store import SQLiteExecutionIdempotencyStore
 from .domain.value_objects.atr import Atr
 from .infrastructure.indicators.ta_atr_calculator import TaAtrCalculator
 from .infrastructure.backtest.file_reporter import FileBacktestReporter
@@ -143,6 +139,16 @@ from .infrastructure.execution.in_memory_position_repo import InMemoryPositionRe
 from .infrastructure.execution.structlog_execution_logger import StructlogExecutionLogger
 from .infrastructure.journal.in_memory_snapshot_repo import InMemorySnapshotRepo
 from .infrastructure.journal.in_memory_trade_journal import InMemoryTradeJournal
+from .infrastructure.repositories.sqlite_position_repository import SQLitePositionRepository
+from .infrastructure.repositories.trade_journal_repository import SQLiteTradeJournal
+from .infrastructure.repositories.snapshot_repository import SQLiteSnapshotRepository
+from .infrastructure.repositories.idempotency_store import SQLiteExecutionIdempotencyStore
+from .infrastructure.exchange.ccxt_position_provider import CcxtExchangePositionProvider
+from .domain.recovery.recovery_engine import RecoveryEngine, RecoveryReport, RecoveryError
+from .domain.recovery.recovery_gate import RecoveryGate, GateState
+from .domain.recovery.reconciliation_engine import ReconciliationEngine
+from .domain.recovery.stream_barrier import StreamConsumptionBarrier
+from .application.services.drift_watchdog import LiveDriftWatchdog
 from .infrastructure.market.ccxt_min_lot_provider import CcxtMinLotProvider
 from .infrastructure.monitoring.in_memory_incident_repo import (
     InMemoryIncidentRepository,
@@ -208,13 +214,16 @@ class Composition:
     mode: str
     notifier: Notifier
     notify_on_event: NotifyOnEventUseCase
-    execution_gate: ExecutionGate | None = None
-    trading_engine: TradingEngine | None = None
     streaming: StreamingComponents | None = None
+    # Persistence & Recovery (FASES 1-8)
     position_repo: PositionRepository | None = None
     system_snapshot_repo: Any | None = None
-    stream_barrier: Any | None = None
-    idempotency_store: Any | None = None
+    recovery_report: RecoveryReport | None = None
+    recovery_blocked: bool = False
+    # Nuevo nivel de riesgo (Fixes 1-4)
+    stream_barrier: StreamConsumptionBarrier | None = None
+    idempotency_store: ExecutionIdempotencyStore | None = None
+    # Fix 4: Live Drift Watchdog
     drift_watchdog: Any | None = None
 
 
@@ -229,7 +238,7 @@ def _is_testnet() -> bool:
 def _build_order_client(exchange: ccxt.Exchange) -> ExchangeOrderClient:
     """Return the appropriate order client based on testnet mode.
 
-    In testnet mode, uses CcxtBinanceTestnetAdapter (Spot).
+    In testnet mode, uses CcxtBinanceTestnetAdapter (Futures Testnet).
     Otherwise uses CcxtOrderClient (futures)."""
     if _is_testnet():
         return CcxtBinanceTestnetAdapter(exchange=exchange)
@@ -243,26 +252,28 @@ def _build_exchange() -> ccxt.Exchange:
     for USDT-margined perpetuals). Credentials are pulled from env vars;
     the constructor raises if they're missing in LIVE mode.
 
-    When BINANCE_TESTNET=true, creates a Binance Spot exchange with
-    sandbox mode enabled, reading BINANCE_TESTNET_API_KEY / _SECRET.
+    When BINANCE_TESTNET=true, creates the exchange configured by
+    EXCHANGE_ID with demo trading enabled, reading
+    BINANCE_TESTNET_API_KEY / BINANCE_TESTNET_SECRET from env vars.
     """
-    if _is_testnet():
-        api_key = os.environ["BINANCE_TESTNET_API_KEY"]
-        api_secret = os.environ["BINANCE_TESTNET_SECRET"]
-        ex: ccxt.Exchange = getattr(ccxt, "binance")({
-            "apiKey": api_key,
-            "secret": api_secret,
-            "enableRateLimit": True,
-        })
-        ex.set_sandbox_mode(True)
-        return ex
-
     ex_id = os.environ.get("EXCHANGE_ID", "binanceusdm")
     klass: Any = getattr(ccxt, ex_id, None)
     if klass is None:
         raise RuntimeError(
             f"unknown_exchange: {ex_id} not a valid ccxt exchange id"
         )
+
+    if _is_testnet():
+        api_key = os.environ["BINANCE_TESTNET_API_KEY"]
+        api_secret = os.environ["BINANCE_TESTNET_SECRET"]
+        ex: ccxt.Exchange = klass({
+            "apiKey": api_key,
+            "secret": api_secret,
+            "enableRateLimit": True,
+        })
+        ex.enable_demo_trading(True)
+        return ex
+
     api_key = os.environ.get("EXCHANGE_API_KEY")
     api_secret = os.environ.get("EXCHANGE_API_SECRET")
     return klass({
@@ -401,6 +412,22 @@ class _NoopOrderClient(ExchangeOrderClient):
             status=OrderStatus.FILLED,
         )
 
+    async def cancel_order(self, order_id: str, symbol: str) -> bool:
+        return True
+
+    async def place_stop_loss_order(
+        self, symbol: str, side: Any, amount: Any, stop_price: Any
+    ) -> Any:
+        from .domain.value_objects.order import OrderResult, OrderStatus, OrderType
+        return OrderResult(
+            id="noop-sl-1",
+            symbol=symbol,
+            side=side,
+            type=OrderType.STOP_LOSS_MARKET,
+            filled_amount=amount,
+            status=OrderStatus.NEW,
+        )
+
     async def place_emergency_market(
         self, symbol: str, side: Any, amount: Any
     ) -> Any:
@@ -418,6 +445,14 @@ class _NoopOrderClient(ExchangeOrderClient):
 def build_composition() -> Composition:
     """Construct the engine's composition for the current mode."""
     mode = _env_mode()
+
+    # ── FORCE_LIVE_SIMULATION override ──────────────────────────────────
+    force_ls = os.environ.get("FORCE_LIVE_SIMULATION", "").lower() in ("true", "1", "yes")
+    if force_ls and mode != "LIVE_SIMULATION":
+        log.info("force_live_simulation_override", original_mode=mode)
+        mode = "LIVE_SIMULATION"
+        os.environ["ENVIRONMENT_MODE"] = "LIVE_SIMULATION"
+
     log.info("composition_mode", mode=mode)
 
     # H5: preflight check aborts LIVE mode if secrets are missing.
@@ -430,28 +465,24 @@ def build_composition() -> Composition:
 
     compute_position_size = _build_h2(mode, exchange)
 
-    # H3 wiring
+    # Persistence wiring (FASES 1-8)
     if mode == "BACKTESTING":
         trade_journal: TradeJournal = InMemoryTradeJournal()
         snapshot_repo: DrawdownSnapshotRepo = InMemorySnapshotRepo()
         position_repo: PositionRepository = InMemoryPositionRepository()
         system_snapshot_repo: Any = None
     else:
-        trade_journal = InMemoryTradeJournal()
-        snapshot_repo = InMemorySnapshotRepo()
-        position_repo = InMemoryPositionRepository()
-        system_snapshot_repo = None
+        # PAPER/LIVE — persistent SQLite stores
+        trade_journal = SQLiteTradeJournal()
+        snapshot_repo = InMemorySnapshotRepo()  # Keep DrawdownSnapshotRepo in-memory
+        position_repo = SQLitePositionRepository()
+        system_snapshot_repo = SQLiteSnapshotRepository()
 
-    # Stream barrier + idempotency (Fase 1 backpressure)
+    # Nuevo nivel de riesgo: stream barrier + idempotency
     if mode == "BACKTESTING":
-        from .domain.recovery.stream_barrier import StreamConsumptionBarrier
         stream_barrier: StreamConsumptionBarrier | None = None
-        idempotency_store: Any = None
+        idempotency_store: ExecutionIdempotencyStore | None = None
     else:
-        from .domain.recovery.stream_barrier import StreamConsumptionBarrier
-        from .infrastructure.repositories.idempotency_store import (
-            SQLiteExecutionIdempotencyStore,
-        )
         stream_barrier = StreamConsumptionBarrier()
         idempotency_store = SQLiteExecutionIdempotencyStore()
 
@@ -482,9 +513,6 @@ def build_composition() -> Composition:
     )
     list_incidents_uc = ListIncidentsUseCase(repo=incident_repo)
 
-    # H1 (Fase 1) — ExecutionGate + TradingEngine control plane
-    gate = SourceExecutionGate()
-
     # H6 wiring — Notifications (publish events to Redis stream)
     if mode == "BACKTESTING":
         notifier: Notifier = LoggingNotifier()
@@ -496,14 +524,10 @@ def build_composition() -> Composition:
         notifier = CompositeNotifier(channels)
     notify_on_event_uc = NotifyOnEventUseCase(notifier=notifier)
 
-    # Drift watchdog (PAPER/LIVE only)
+    # Fix 4: Live Drift Watchdog (PAPER/LIVE only)
     if mode == "BACKTESTING":
-        drift_watchdog: Any = None
+        drift_watchdog: LiveDriftWatchdog | None = None
     else:
-        from .application.services.drift_watchdog import LiveDriftWatchdog
-        from .infrastructure.exchange.ccxt_position_provider import (
-            CcxtExchangePositionProvider,
-        )
         if exchange is not None:
             exchange_provider = CcxtExchangePositionProvider(
                 exchange=exchange,
@@ -519,34 +543,31 @@ def build_composition() -> Composition:
         else:
             drift_watchdog = None
 
-    # Streaming inference components (PAPER/LIVE only)
-    if mode == "BACKTESTING":
-        streaming: StreamingComponents | None = None
-    else:
-        from .infrastructure.trading.candle_builder import CandleBuilder, CandleBuffer
-        from .infrastructure.trading.streaming_inference import StreamingInferencePipeline
-        from .infrastructure.trading.streaming_signal_processor import (
-            StreamingSignalProcessor,
-        )
-        from .infrastructure.exchange.funding_rate_provider import FundingRateProvider
-        symbol = os.environ.get("SYMBOL", "BTC/USDT")
-        models_dir = Path(__file__).resolve().parent.parent / "models"
-        funding_provider = FundingRateProvider(exchange) if exchange else None
-        candle_builder = CandleBuilder(symbol=symbol, timeframe_seconds=3600)
-        candle_buffer = CandleBuffer(maxlen=2000)
-        inference_pipeline = StreamingInferencePipeline(
-            symbol=symbol,
-            inference_timeframe="1h",
-            checkpoint_base=models_dir,
-            additional_feature_provider=funding_provider,
-        )
-        signal_processor = StreamingSignalProcessor(symbol=symbol)
-        streaming = StreamingComponents(
-            candle_builder=candle_builder,
-            candle_buffer=candle_buffer,
-            inference_pipeline=inference_pipeline,
-            signal_processor=signal_processor,
-        )
+    # Streaming inference components (H8+ / real-time trading)
+    symbol = os.environ.get("SYMBOL", "BTC/USDT")
+    models_dir = Path(__file__).resolve().parent.parent / "models"
+    from .infrastructure.trading.candle_builder import CandleBuffer, CandleBuilder
+    from .infrastructure.trading.streaming_inference import StreamingInferencePipeline
+    from .infrastructure.trading.streaming_signal_processor import (
+        StreamingSignalProcessor,
+    )
+    from .infrastructure.exchange.funding_rate_provider import FundingRateProvider
+    funding_provider = FundingRateProvider(exchange) if exchange else None
+    candle_builder = CandleBuilder(symbol=symbol, timeframe_seconds=3600)
+    candle_buffer = CandleBuffer(maxlen=2000)
+    inference_pipeline = StreamingInferencePipeline(
+        symbol=symbol,
+        inference_timeframe="1h",
+        checkpoint_base=models_dir,
+        additional_feature_provider=funding_provider,
+    )
+    signal_processor = StreamingSignalProcessor(symbol=symbol)
+    streaming = StreamingComponents(
+        candle_builder=candle_builder,
+        candle_buffer=candle_buffer,
+        inference_pipeline=inference_pipeline,
+        signal_processor=signal_processor,
+    )
 
     return Composition(
         compute_position_size=compute_position_size,
@@ -566,7 +587,6 @@ def build_composition() -> Composition:
         mode=mode,
         notifier=notifier,
         notify_on_event=notify_on_event_uc,
-        execution_gate=gate,
         streaming=streaming,
         position_repo=position_repo,
         system_snapshot_repo=system_snapshot_repo,
@@ -885,11 +905,14 @@ def get_predict_ensemble_usecase(request: Request) -> PredictEnsembleSignalUseCa
 
     if comp.mode == "BACKTESTING":
         ohlcv_source: OhlcvSource = _FakeOhlcvSource()  # type: ignore[arg-type]
+        additional_features = None
     else:
         exchange = comp.exchange
         if exchange is None:
             raise RuntimeError("exchange is None in non-BACKTESTING mode")
         ohlcv_source = _CcxtOhlcvAdapter(exchange)
+        from .infrastructure.data.additional_data_consumer import AdditionalDataConsumer
+        additional_features = AdditionalDataConsumer()
 
     from .infrastructure.analysis.confidence_filter import SignalConfidenceFilter
     from .infrastructure.analysis.regime_detector import RuleBasedRegimeDetector
@@ -919,7 +942,8 @@ def get_predict_ensemble_usecase(request: Request) -> PredictEnsembleSignalUseCa
             )
             uncertainty_estimator = MCDropoutUncertaintyEstimator(tf_model)
         except Exception:
-            pass
+            log.warning("mc_dropout_import_failed", msg="MCDropoutUncertaintyEstimator not available")
+            uncertainty_estimator = None
 
     use_case = PredictEnsembleSignalUseCase(
         ohlcv_source=ohlcv_source,
@@ -932,6 +956,7 @@ def get_predict_ensemble_usecase(request: Request) -> PredictEnsembleSignalUseCa
         uncertainty_estimator=uncertainty_estimator,
         confidence_filter=confidence_filter,
         regime_detector=regime_detector,
+        additional_feature_provider=additional_features,
     )
     request.app.state.predict_ensemble_usecase = use_case
     return use_case
@@ -999,7 +1024,13 @@ async def get_model_use_cases(request: Request) -> _ModelUseCases:
         )
     else:
         from .infrastructure.models.nova_quant_keras import NovaQuantKerasModel
-        keras_model = NovaQuantKerasModel()
+        try:
+            keras_model = NovaQuantKerasModel()
+        except RuntimeError as e:
+            log.warning("keras_model_unavailable", error=str(e))
+            use_cases = _ModelUseCases(train=None, predict=None)
+            request.app.state.model_use_cases = use_cases
+            return use_cases
         train_uc = TrainModelUseCase(
             ohlcv_source=ohlcv_source,
             preprocessor=preprocessor,
@@ -1088,26 +1119,6 @@ class _CcxtOhlcvAdapter:
         return df.to_dict("records")
 
 
-# Fase 1 — Trading Engine (cached in app.state) -------------------------------
-
-
-def get_trading_engine_usecase(request: Request) -> LiveTradingEngine:
-    cached: LiveTradingEngine | None = getattr(
-        request.app.state, "trading_engine", None
-    )
-    if cached is not None:
-        return cached
-
-    comp = _comp(request)
-    execute_uc = get_execute_signal_usecase(request)
-    gate = comp.execution_gate
-    if gate is None:
-        raise RuntimeError("execution_gate not wired in composition")
-    engine = LiveTradingEngine(gate=gate, use_case=execute_uc)
-    request.app.state.trading_engine = engine
-    return engine
-
-
 # H7 — Live Execution Engine (cached in app.state) ----------------------------
 
 
@@ -1142,16 +1153,11 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
     else:
         exchange_client = _build_order_client(comp.exchange)
         async def _check_halted() -> bool:
-            return comp.check_drawdown.is_halted()
+            return await comp.check_drawdown.is_halted()
         drawdown_checker = _check_halted
 
     position_repo = get_position_repo(request)
     execution_logger = StructlogExecutionLogger()
-
-    if comp.mode == "BACKTESTING":
-        idempotency_store = None
-    else:
-        idempotency_store = SQLiteExecutionIdempotencyStore()
 
     use_case = ExecuteSignalUseCase(
         signal_validator=validator,
@@ -1161,8 +1167,13 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
         position_repo=position_repo,
         execution_logger=execution_logger,
         is_halted=drawdown_checker,
-        idempotency_store=idempotency_store,
     )
+
+    # ECL Module 4: wrap with ExecutionGate to block non-STREAMING sources
+    from .infrastructure.trading.execution_gate import ExecutionGate
+    gated = ExecutionGate(use_case.execute)
+    use_case.execute = gated.execute  # type: ignore[assignment]
+
     request.app.state.execute_signal_usecase = use_case
     return use_case
 
@@ -1200,7 +1211,7 @@ def get_execution_engine_usecase(request: Request) -> ExecutionEngine:
     else:
         exchange_client = _build_order_client(comp.exchange)
         async def _ee_check_halted() -> bool:
-            return comp.check_drawdown.is_halted()
+            return await comp.check_drawdown.is_halted()
         drawdown_checker = _ee_check_halted
 
     position_repo = get_position_repo(request)
@@ -1239,12 +1250,25 @@ def get_monitor_positions_usecase(request: Request) -> MonitorPositionsUseCase:
     else:
         exchange_client = _build_order_client(comp.exchange)
 
-    if _is_testnet() and hasattr(exchange_client, "get_price"):
+    if hasattr(exchange_client, "get_price"):
         price_provider = exchange_client.get_price  # type: ignore[union-attr]
     else:
-        async def _fake_price(symbol: str) -> Decimal:
-            return Decimal("0")
-        price_provider = _fake_price
+        exchange = comp.exchange
+        if exchange is None:
+            async def _no_price(_symbol: str) -> Decimal:
+                return Decimal("0")
+            price_provider = _no_price
+        else:
+            async def _ccxt_price(symbol: str) -> Decimal:
+                try:
+                    ticker = await exchange.fetch_ticker(symbol)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"price_fetch_failed: {symbol}: {e}"
+                    ) from e
+                last = ticker.get("last") or ticker.get("close") or 0.0
+                return Decimal(str(last))
+            price_provider = _ccxt_price
 
     use_case = MonitorPositionsUseCase(
         position_repo=position_repo,
@@ -1264,9 +1288,59 @@ def get_position_repo(request: Request) -> PositionRepository:
     if cached is not None:
         return cached
 
+    # Try to use the composition's position_repo (SQLite for PAPER/LIVE)
+    comp: Composition | None = getattr(request.app.state, "composition", None)
+    if comp is not None and comp.position_repo is not None:
+        request.app.state.position_repo = comp.position_repo
+        return comp.position_repo
+
     repo = InMemoryPositionRepository()
     request.app.state.position_repo = repo
     return repo
+
+
+async def run_recovery(comp: Composition) -> RecoveryReport | None:
+    """Run recovery startup for PAPER/LIVE mode.
+
+    Called from main.py lifespan after build_composition().
+    Returns the recovery report, or None if recovery was skipped/failed.
+
+    Raises RecoveryError on BLOCKED state — main.py handles it.
+    """
+    if comp.mode == "BACKTESTING":
+        return None
+    if comp.exchange is None or comp.system_snapshot_repo is None:
+        return None
+
+    symbol = os.environ.get("SYMBOL", "BTC/USDT")
+    position_repo = comp.position_repo
+    if position_repo is None:
+        return None
+
+    exchange_provider = CcxtExchangePositionProvider(
+        exchange=comp.exchange,
+        symbols=(symbol,),
+    )
+    recovery_engine = RecoveryEngine(
+        position_repo=position_repo,
+        exchange_provider=exchange_provider,
+        snapshot_repo=comp.system_snapshot_repo,
+        position_repo_raw=position_repo,
+        equity_provider=CcxtBalanceProvider(comp.exchange) if comp.exchange else None,
+        trade_journal=comp.trade_journal,
+    )
+    report = await recovery_engine.recover()
+    log.info(
+        "recovery_complete",
+        snapshot_loaded=report.snapshot_loaded,
+        local_positions=report.local_positions_count,
+        exchange_positions=report.exchange_positions_count,
+        gate_state=report.gate.state.value,
+        actions=len(report.actions_taken),
+        errors=len(report.errors),
+    )
+    comp.recovery_report = report
+    return report
 
 
 class _FakeAtrCalculator(AtrCalculator):

@@ -17,6 +17,7 @@ Stack: pathlib, json.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -32,7 +33,7 @@ from ...domain.entities.nova_quant_model import (
 )
 from ...domain.value_objects.model_config import ModelConfig
 
-_DEFAULT_BASE_DIR = Path.home() / ".novaquant" / "checkpoints"
+_DEFAULT_BASE_DIR = Path(os.environ.get("ARGOS_CHECKPOINT_DIR", "/tmp/argos-checkpoints"))
 
 
 class FsCheckpointRepository:

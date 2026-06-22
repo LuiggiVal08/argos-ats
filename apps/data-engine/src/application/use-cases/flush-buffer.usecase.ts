@@ -36,6 +36,7 @@ export class FlushBufferUseCase {
         failed = true
         await this.buffer.push(t)
         reBuffered++
+        console.warn(`[flush] publish failed for tick ${t.tradeId}`)
       }
     }
     return { drained: ticks.length, published, reBuffered }

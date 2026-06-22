@@ -1,8 +1,11 @@
 import "reflect-metadata"
 import { NestFactory } from "@nestjs/core"
 import { AppModule } from "./app.module"
+import { preflightCheck } from "./infrastructure/security/preflight"
 
 async function bootstrap(): Promise<void> {
+  preflightCheck()
+
   const app = await NestFactory.create(AppModule)
   app.enableShutdownHooks()
   await app.listen(3000)
