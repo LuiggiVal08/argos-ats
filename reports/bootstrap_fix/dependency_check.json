@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-06-19T19:15:00Z",
+  "source": "pyproject.toml",
+  "phase": "FASE 1 — ML Dependencies",
+  "dependencies": {
+    "main_layer": {
+      "tensorflow": ">=2.15",
+      "xgboost": ">=2.0",
+      "scikit-learn": ">=1.3",
+      "numpy": ">=1.26",
+      "pandas": ">=2.1",
+      "scipy": "via numpy/pandas",
+      "ta": ">=0.11"
+    },
+    "optional": {
+      "torch": ">=2.1",
+      "matplotlib": ">=3.8"
+    }
+  },
+  "install_hint": "Re-run: pip install -e '.[ml,validation,dev]' or rebuild Docker image",
+  "container_path": "/app/argos_bot_env/lib/python3.11/site-packages/",
+  "bundled_wheels": null
+}

@@ -3,7 +3,7 @@ description: Redacta una nueva Historia de Usuario siguiendo el formato de spec.
 agent: plan
 ---
 
-You are drafting a new user story for the argos-bot project, in the same style as @spec.md section 5.
+You are drafting a new user story for the argos-ats project, in the same style as @spec.md section 5.
 
 Brief from the user: $ARGUMENTS
 

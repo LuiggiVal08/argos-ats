@@ -1,0 +1,16 @@
+{
+  "stream": "system:heartbeat",
+  "description": "Periodic health heartbeat emitted by each service",
+  "version": 1,
+  "fields": {
+    "service":        { "type": "string", "required": true, "enum": ["data-engine", "analytics-engine"], "description": "Emitting service" },
+    "status":         { "type": "string", "required": true, "enum": ["healthy", "degraded", "halted"] },
+    "uptime_seconds": { "type": "integer", "required": true, "min": 0 },
+    "mode":           { "type": "string", "required": true, "enum": ["BACKTESTING", "PAPER_TRADING", "LIVE", "LIVE_SIMULATION"] },
+    "broker_ok":      { "type": "boolean", "required": true, "description": "Redis broker reachable" },
+    "exchange_ok":    { "type": "boolean", "required": true, "description": "Exchange connection healthy" },
+    "loops_alive":    { "type": "integer", "required": false, "min": 0, "description": "Number of alive streaming loops" },
+    "timestamp":      { "type": "integer", "required": true, "min": 0 },
+    "schema_version": { "type": "integer", "required": true, "const": 1 }
+  }
+}

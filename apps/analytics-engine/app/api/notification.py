@@ -23,7 +23,7 @@ async def test_notification(request: Request) -> dict:
         event_type=NotificationEventType.TEST,
         severity=NotificationSeverity.INFO,
         title="Test Notification",
-        message="This is a test message from argos-bot analytics engine.",
+        message="This is a test message from argos-ats analytics engine.",
         symbol="BTC/USDT",
     )
     await notify.execute(event)

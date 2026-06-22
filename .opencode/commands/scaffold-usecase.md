@@ -3,7 +3,7 @@ description: Genera un Caso de Uso (capa de Aplicación) que orquesta Dominio + 
 agent: build
 ---
 
-You are scaffolding a new Application-layer use case for the argos-bot project.
+You are scaffolding a new Application-layer use case for the argos-ats project.
 
 Target engine: $1 (`data-engine` or `analytics-engine`).
 Use case name: $2 (e.g. `ProcesarSenalIA`, `EjecutarCompra`).

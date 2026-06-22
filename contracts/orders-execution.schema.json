@@ -1,0 +1,16 @@
+{
+  "stream": "orders:execution",
+  "description": "Execution order published by analytics-engine for data-engine to execute",
+  "version": 1,
+  "fields": {
+    "order_id":        { "type": "string", "required": true, "pattern": "^[0-9a-f-]{36}$", "description": "UUID v7" },
+    "signal_id":       { "type": "string", "required": true, "pattern": "^[0-9a-f-]{36}$", "description": "Signal UUID that originated this order" },
+    "symbol":          { "type": "string", "required": true, "pattern": "^[A-Z0-9]+/[A-Z0-9]+$" },
+    "side":            { "type": "string", "required": true, "enum": ["BUY", "SELL"] },
+    "order_type":      { "type": "string", "required": true, "enum": ["MARKET"], "description": "Only MARKET in MVP" },
+    "amount":          { "type": "string", "required": true, "pattern": "^\\d+\\.?\\d*$", "description": "Contract amount as decimal string" },
+    "idempotency_key": { "type": "string", "required": true, "pattern": "^exec:", "description": "exec:{signal_id} — prevents duplicate execution" },
+    "timestamp":       { "type": "integer", "required": true, "min": 0, "description": "Order creation timestamp ms UTC" },
+    "schema_version":  { "type": "integer", "required": true, "const": 1 }
+  }
+}

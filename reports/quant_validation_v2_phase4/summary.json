@@ -1,0 +1,202 @@
+{
+  "experiment": "QV2_Phase4",
+  "protocol": {
+    "lookahead": 5,
+    "stride": 5,
+    "embargo": 1
+  },
+  "verdict": "REGIME-INVARIANT ALPHA",
+  "control": {
+    "binary_f1": 0.7435941859895395,
+    "auc": 0.8260058918370141,
+    "regression_r2": 0.3081,
+    "f1_dev_pct": 0.1,
+    "r2_dev_pct": 0.0
+  },
+  "metrics": {
+    "full": {
+      "n_samples": 7808,
+      "n_binary": 4044,
+      "n_regression": 7797,
+      "binary_f1": 0.7435941859895395,
+      "auc": 0.8260058918370141,
+      "regression_r2": 0.3081,
+      "shuffle_delta_bin": 0.2904,
+      "shuffle_delta_reg": 0.4151,
+      "best_model_bin": "LogisticRegression",
+      "best_model_reg": "Ridge",
+      "stability_f1": 0.9268,
+      "stability_auc": 0.9245,
+      "stability_r2": 0.6089
+    },
+    "bull": {
+      "n_samples": 3111,
+      "n_binary": 1586,
+      "n_regression": 3110,
+      "binary_f1": 0.739776788519913,
+      "auc": 0.8288923874529444,
+      "regression_r2": 0.2467,
+      "shuffle_delta_bin": 0.2825,
+      "shuffle_delta_reg": 0.4615,
+      "best_model_bin": "LogisticRegression",
+      "best_model_reg": "HistGradientBoostingRegressor",
+      "stability_f1": 0.8005,
+      "stability_auc": 0.8805,
+      "stability_r2": 0.5105
+    },
+    "bear": {
+      "n_samples": 3122,
+      "n_binary": 1625,
+      "n_regression": 3122,
+      "binary_f1": 0.7333256430431443,
+      "auc": 0.8000881343736661,
+      "regression_r2": 0.2341,
+      "shuffle_delta_bin": 0.2639,
+      "shuffle_delta_reg": 0.4974,
+      "best_model_bin": "HistGradientBoosting",
+      "best_model_reg": "HistGradientBoostingRegressor",
+      "stability_f1": 0.8845,
+      "stability_auc": 0.9213,
+      "stability_r2": 0.7852
+    },
+    "sideways": {
+      "n_samples": 1566,
+      "n_binary": 833,
+      "n_regression": 1565,
+      "binary_f1": 0.7196393991063834,
+      "auc": 0.8107387276887204,
+      "regression_r2": 0.1703,
+      "shuffle_delta_bin": 0.2402,
+      "shuffle_delta_reg": 0.3797,
+      "best_model_bin": "HistGradientBoosting",
+      "best_model_reg": "Ridge",
+      "stability_f1": 0.8495,
+      "stability_auc": 0.866,
+      "stability_r2": 0.0215
+    },
+    "high_vol": {
+      "n_samples": 1966,
+      "n_binary": 982,
+      "n_regression": 1966,
+      "binary_f1": 0.6919921502351442,
+      "auc": 0.7954517423614028,
+      "regression_r2": 0.147,
+      "shuffle_delta_bin": 0.2371,
+      "shuffle_delta_reg": 2.5408,
+      "best_model_bin": "HistGradientBoosting",
+      "best_model_reg": "Ridge",
+      "stability_f1": 0.8984,
+      "stability_auc": 0.8781,
+      "stability_r2": -0.7605
+    },
+    "medium_vol": {
+      "n_samples": 3887,
+      "n_binary": 2066,
+      "n_regression": 3879,
+      "binary_f1": 0.7485841097632486,
+      "auc": 0.8439746847230634,
+      "regression_r2": 0.3375,
+      "shuffle_delta_bin": 0.2817,
+      "shuffle_delta_reg": 0.5691,
+      "best_model_bin": "LogisticRegression",
+      "best_model_reg": "Ridge",
+      "stability_f1": 0.9357,
+      "stability_auc": 0.9794,
+      "stability_r2": 0.7635
+    },
+    "low_vol": {
+      "n_samples": 1952,
+      "n_binary": 996,
+      "n_regression": 1952,
+      "binary_f1": 0.7256578757302579,
+      "auc": 0.8088637534092538,
+      "regression_r2": 0.2691,
+      "shuffle_delta_bin": 0.2655,
+      "shuffle_delta_reg": 0.5105,
+      "best_model_bin": "LogisticRegression",
+      "best_model_reg": "Ridge",
+      "stability_f1": 0.8424,
+      "stability_auc": 0.8699,
+      "stability_r2": 0.6964
+    }
+  },
+  "gates": {
+    "full": {
+      "f1_pass": true,
+      "auc_pass": true,
+      "r2_pass": true,
+      "shuffle_bin_pass": true,
+      "shuffle_reg_pass": true
+    },
+    "bull": {
+      "f1_pass": true,
+      "auc_pass": true,
+      "r2_pass": true,
+      "shuffle_bin_pass": true,
+      "shuffle_reg_pass": true
+    },
+    "bear": {
+      "f1_pass": true,
+      "auc_pass": true,
+      "r2_pass": true,
+      "shuffle_bin_pass": true,
+      "shuffle_reg_pass": true
+    },
+    "sideways": {
+      "f1_pass": true,
+      "auc_pass": true,
+      "r2_pass": true,
+      "shuffle_bin_pass": true,
+      "shuffle_reg_pass": true
+    },
+    "high_vol": {
+      "f1_pass": true,
+      "auc_pass": true,
+      "r2_pass": true,
+      "shuffle_bin_pass": true,
+      "shuffle_reg_pass": true
+    },
+    "medium_vol": {
+      "f1_pass": true,
+      "auc_pass": true,
+      "r2_pass": true,
+      "shuffle_bin_pass": true,
+      "shuffle_reg_pass": true
+    },
+    "low_vol": {
+      "f1_pass": true,
+      "auc_pass": true,
+      "r2_pass": true,
+      "shuffle_bin_pass": true,
+      "shuffle_reg_pass": true
+    }
+  },
+  "trend_stability": {
+    "stability_f1": 0.9678,
+    "stability_auc": 0.9652,
+    "stability_r2": 0.5527,
+    "max_f1": 0.7436,
+    "min_f1": 0.7196,
+    "max_auc": 0.8289,
+    "min_auc": 0.8001,
+    "max_r2": 0.3081,
+    "min_r2": 0.1703,
+    "ratio_f1": 1.0333,
+    "ratio_auc": 1.036,
+    "ratio_r2": 1.8092
+  },
+  "volatility_stability": {
+    "stability_f1": 0.9244,
+    "stability_auc": 0.9425,
+    "stability_r2": 0.4356,
+    "max_f1": 0.7486,
+    "min_f1": 0.692,
+    "max_auc": 0.844,
+    "min_auc": 0.7955,
+    "max_r2": 0.3375,
+    "min_r2": 0.147,
+    "ratio_f1": 1.0818,
+    "ratio_auc": 1.061,
+    "ratio_r2": 2.2959
+  }
+}

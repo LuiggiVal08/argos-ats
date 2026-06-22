@@ -88,6 +88,10 @@ async def execute_signal(
     except ExecuteSignalError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    if not hasattr(result, "report"):
+        reason = getattr(result, "reason", "gate_blocked")
+        raise HTTPException(status_code=425, detail=reason)
+
     return _report_to_dict(result.report)
 
 

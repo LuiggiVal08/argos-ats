@@ -8,7 +8,7 @@ const SPEC = path.join(ROOT, "spec.md")
 const readSpec = (): string => {
   if (!existsSync(SPEC))
     throw new Error(
-      "spec.md not found at project root. The argos-bot workflow assumes spec.md is the source of truth.",
+      "spec.md not found at project root. The argos-ats workflow assumes spec.md is the source of truth.",
     )
   return readFileSync(SPEC, "utf8")
 }

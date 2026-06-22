@@ -1,0 +1,15 @@
+{
+  "stream": "system:errors",
+  "description": "Critical error event emitted by any service",
+  "version": 1,
+  "fields": {
+    "error_id":       { "type": "string", "required": true, "pattern": "^[0-9a-f-]{36}$", "description": "UUID v7" },
+    "service":        { "type": "string", "required": true, "enum": ["data-engine", "analytics-engine"] },
+    "severity":       { "type": "string", "required": true, "enum": ["WARN", "ERROR", "CRITICAL"] },
+    "error_code":     { "type": "string", "required": true, "description": "Machine-readable error code, e.g. EXECUTION_FAILED" },
+    "message":        { "type": "string", "required": true, "description": "Human-readable error description" },
+    "metadata":       { "type": "object", "required": false, "description": "Arbitrary structured context" },
+    "timestamp":      { "type": "integer", "required": true, "min": 0 },
+    "schema_version": { "type": "integer", "required": true, "const": 1 }
+  }
+}

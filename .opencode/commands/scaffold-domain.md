@@ -3,7 +3,7 @@ description: Genera una nueva entidad de Dominio (Hexagonal) para el engine indi
 agent: build
 ---
 
-You are scaffolding a new Domain entity for the argos-bot project.
+You are scaffolding a new Domain entity for the argos-ats project.
 
 Target engine: $1 (must be either `data-engine` or `analytics-engine`).
 Entity name: $2.

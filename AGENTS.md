@@ -1,11 +1,11 @@
-# AGENTS.md — Reglas para el AI agent de argos-bot
+# AGENTS.md — Reglas para el AI agent de argos-ats
 
 > Cargado al inicio de cada sesión. Define cómo me comporto en este proyecto.
 > Si una regla entra en conflicto con un pedido del usuario, gana la regla más restrictiva (la que protege el sistema).
 
 ## 1. Contexto del proyecto
 
-**argos-bot** es un bot de trading autónomo de grado de producción para futuros perpetuos de criptomonedas.
+**argos-ats** es un Sistema de Trading Autónomo (ATS) de grado de producción para futuros perpetuos de criptomonedas.
 
 - **Arquitectura**: microservicios event-driven, hexagonal internamente, **agnóstica al deployment**.
 - **Servicios**:
@@ -121,6 +121,11 @@ Mismo patrón para `apps/analytics-engine/app/` con `domain/`, `application/`, `
 | Health check agnóstico (Docker o bare metal) | `health_health_check`                         |
 | Backtest                                     | `backtest` (con args)                         |
 | Indicador técnico                            | `indicators` (con args)                       |
+| Ver estado de sesión                         | `session_status`                              |
+| Inicializar sesión                           | `session_begin <branch>`                      |
+| Bloquear archivo                             | `session_lock <path> <change>`                |
+| Liberar archivo                              | `session_unlock <path>`                       |
+| Registrar decisión de diseño                 | `session_decision <scope> <decision>`         |
 
 ## 8. Comandos slash disponibles
 
@@ -279,6 +284,65 @@ Esta regla asume que el repo tiene `git init`, `main` y `dev` creadas con el pri
 - Si el PR ya se mergeó a `dev`: anotarlo en bitácora de `TASKS.md`.
 - Si se mergeó a `main`: decirlo **explícitamente** (es deployable).
 
+## 13. Session Semaphore — control de concurrencia entre sesiones
+
+> Sistema de locks por archivo para que múltiples sesiones de AI agent trabajen
+> en paralelo sin pisarse. El estado vive en `SESSION.json` (no versionado, en `.gitignore`).
+> `SESSION.md` contiene la documentación del sistema.
+
+### Ciclo de vida de un archivo
+
+```
+free ──→ in_progress (tomado por sesión X) ──→ done ──→ free (disponible)
+                                           ──→ verified ──→ free
+                                           ──→ superseded ──→ free
+```
+
+### Flujo obligatorio por sesión
+
+1. **Inicio** — leer `SESSION.md` vía `session_status`:
+   - Si hay archivos `in_progress` de otra sesión: listarlos y decidir si continuar.
+   - Si no hay conflicto → `session_begin(branch)` para registrar la sesión.
+
+2. **Antes de editar cualquier archivo** — `session_lock(path, change, detail, scope)`:
+   - Si el archivo está `free` → lo tomás, nadie más lo toca.
+   - Si otra sesión ya lo tiene con **mismo scope** → **saltás** ("ya está cubierto").
+   - Si otra sesión lo tiene con **distinto scope** → registrás posible conflicto.
+
+3. **Decisiones no triviales** — `session_decision(scope, decision, rationale, alternative)`:
+   - Registrar ANTES de implementar. Incluir rationale y alternativa descartada.
+   - Esto evita que otra sesión revierta una decisión sin saberlo.
+
+4. **Al terminar de editar** — `session_unlock(path, status?, needs_review?)`:
+   - `status=done` (default): cambio terminado, archivo libre.
+   - `status=verified`: cambio revisado y aprobado.
+   - `status=superseded`: otra solución reemplazó esta.
+   - `needs_review=true`: pedís que otra sesión verifique.
+
+5. **Verificación cruzada** — si encontrás un archivo `done` con `needs_review=true`:
+   - Lo revisás y lo marcás como `verified` o `superseded`.
+
+6. **Cierre** — no es necesario "cerrar sesión" para liberar archivos.
+   - Los archivos se liberan individualmente con `session_unlock`.
+   - Cuando todos tus `locked_files` están `done`, la sesión puede cerrar.
+
+### Herramientas disponibles
+
+| Herramienta | Cuándo usarla |
+|---|---|
+| `session_status` | Al inicio de cada sesión, o para ver el estado actual |
+| `session_begin` | Al empezar una sesión (asigna UUID, setea branch) |
+| `session_lock` | Antes de editar cualquier archivo |
+| `session_unlock` | Al terminar de editar un archivo |
+| `session_decision` | Antes de implementar una decisión no trivial |
+
+### Anti-patrones (lo que NUNCA hago)
+
+- ❌ Editar un archivo sin antes llamar `session_lock`.
+- ❌ Ignorar un lock activo de otra sesión.
+- ❌ No registrar una decisión de diseño que afecte a otros módulos.
+- ❌ Dejar un archivo `in_progress` al cerrar sesión (si pasa, la siguiente sesión lo ve y pregunta).
+
 ---
 
-**Última actualización**: 2026-06-06 — añadida sección 12 (Git workflow).
+**Última actualización**: 2026-06-19 — añadida sección 13 (Session Semaphore).

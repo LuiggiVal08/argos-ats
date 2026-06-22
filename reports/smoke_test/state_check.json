@@ -1,0 +1,15 @@
+{
+  "checkpoint_schema_exists": true,
+  "checkpoint_files": [
+    "ae_log_summary.json",
+    "latency.json",
+    "system_health.json",
+    "system_metrics.json"
+  ],
+  "reports_files": [
+    "ae_log_summary.json",
+    "latency.json",
+    "system_health.json",
+    "system_metrics.json"
+  ]
+}

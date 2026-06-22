@@ -3,7 +3,7 @@ description: Audita la lógica de riesgo y el Circuit Breaker contra el spec
 agent: plan
 ---
 
-You are performing a read-only audit of the risk management subsystem in argos-bot.
+You are performing a read-only audit of the risk management subsystem in argos-ats.
 
 Re-read @spec.md section 3 (decision logic) and the user stories in section 5: Historia 2 (position sizing) and Historia 3 (circuit breaker).
 

@@ -163,7 +163,7 @@ export const init_analytics_engine = tool({
             '[project]\n' +
             'name = "argos-analytics-engine"\n' +
             'version = "0.0.1"\n' +
-            'description = "Argos bot - analytics & IA engine (FastAPI)."\n' +
+            'description = "Argos ATS - analytics & IA engine (FastAPI)."\n' +
             'requires-python = ">=3.11"\n' +
             'dependencies = [\n' +
             '    "fastapi>=0.110",\n' +
@@ -283,7 +283,7 @@ export const init_compose = tool({
             };
 
         const compose =
-            '# Argos bot - production-grade trading bot stack\n' +
+            '# Argos ATS - production-grade Automated Trading System stack\n' +
             '# Spec: spec.md sections 1 and 4 (OWASP 4-phase incident response)\n' +
             '#\n' +
             '# Broker is pluggable. Default uses redis:7-alpine. To use another\n' +

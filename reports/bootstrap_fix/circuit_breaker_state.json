@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-06-19T19:15:00Z",
+  "phase": "FASE 3 — Circuit Breaker Fix",
+  "root_cause": "main.py:520 missing `await` on comp.check_drawdown.is_halted() — coroutine object is always truthy",
+  "affected_locations": [
+    {
+      "file": "apps/analytics-engine/app/main.py",
+      "line": 520,
+      "function": "_position_monitor_loop",
+      "fix": "added `await`"
+    },
+    {
+      "file": "apps/analytics-engine/app/main.py",
+      "line": 730,
+      "function": "_is_halted() inner (in _build_execute_uc)",
+      "fix": "added `await`"
+    },
+    {
+      "file": "apps/analytics-engine/app/composition.py",
+      "line": 1116,
+      "function": "_check_halted() inner (in get_execute_signal_usecase)",
+      "fix": "added `await`"
+    },
+    {
+      "file": "apps/analytics-engine/app/composition.py",
+      "line": 1174,
+      "function": "_ee_check_halted() inner (in get_execution_engine_usecase)",
+      "fix": "added `await`"
+    }
+  ],
+  "new_behavior": "is_halted() now properly awaited. Returns False when InMemorySnapshotRepo is empty (fresh boot) — system no longer incorrectly enters HALT state.",
+  "impact": "drawdown_halted_skipping_position_check will no longer appear every 5s"
+}

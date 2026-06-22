@@ -1,0 +1,18 @@
+{
+  "stream": "fills:execution",
+  "description": "Fill confirmation published by data-engine after exchange execution",
+  "version": 1,
+  "fields": {
+    "fill_id":          { "type": "string", "required": true, "pattern": "^[0-9a-f-]{36}$", "description": "UUID v7" },
+    "order_id":         { "type": "string", "required": true, "pattern": "^[0-9a-f-]{36}$" },
+    "symbol":           { "type": "string", "required": true, "pattern": "^[A-Z0-9]+/[A-Z0-9]+$" },
+    "side":             { "type": "string", "required": true, "enum": ["BUY", "SELL"] },
+    "filled_qty":       { "type": "string", "required": true, "pattern": "^\\d+\\.?\\d*$", "description": "Executed quantity" },
+    "avg_price":        { "type": "string", "required": true, "pattern": "^\\d+\\.?\\d*$", "description": "Average fill price" },
+    "status":           { "type": "string", "required": true, "enum": ["FILLED", "PARTIALLY_FILLED", "REJECTED"] },
+    "exchange_order_id": { "type": "string", "required": false, "description": "Exchange-assigned order ID" },
+    "error_message":    { "type": "string", "required": false, "description": "Error detail if rejected" },
+    "timestamp":        { "type": "integer", "required": true, "min": 0, "description": "Fill timestamp ms UTC" },
+    "schema_version":   { "type": "integer", "required": true, "const": 1 }
+  }
+}

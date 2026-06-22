@@ -66,7 +66,7 @@ export const health_check = tool({
   args: {},
   async execute() {
     const out: string[] = []
-    out.push("# Argos-bot health check")
+    out.push("# Argos-ATS health check")
     out.push("")
 
     out.push("## Git")

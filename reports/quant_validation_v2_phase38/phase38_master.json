@@ -1,0 +1,21 @@
+{
+  "experiment": "QV2_Phase38",
+  "protocol": {
+    "lookahead": 5,
+    "stride": 5,
+    "embargo": 1
+  },
+  "aborted": false,
+  "elapsed_seconds": 6297.2,
+  "combinations": {
+    "btc_binance": "BTC/USDT",
+    "btc_bybit": "BTC/USDT",
+    "btc_okx": "BTC/USDT",
+    "eth_binance": "ETH/USDT",
+    "eth_bybit": "ETH/USDT",
+    "eth_okx": "ETH/USDT",
+    "sol_binance": "SOL/USDT",
+    "sol_bybit": "SOL/USDT",
+    "sol_okx": "SOL/USDT"
+  }
+}

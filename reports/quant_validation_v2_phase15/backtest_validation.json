@@ -1,0 +1,68 @@
+{
+  "phase": "quant_validation_v2_phase15_backtest",
+  "symbol": "BTC",
+  "train_period": [
+    "2023-06-01",
+    "2024-12-31"
+  ],
+  "test_period": [
+    "2025-01-01",
+    "2026-06-16"
+  ],
+  "model_params": {
+    "C": 0.1,
+    "class_weight": "balanced",
+    "solver": "liblinear",
+    "max_iter": 5000,
+    "random_state": 42
+  },
+  "roundtrip_ok": true,
+  "train_metrics": {
+    "accuracy": 0.7905,
+    "f1": 0.795
+  },
+  "backtest_metrics": {
+    "n_trades": 735,
+    "n_wins": 552,
+    "n_losses": 183,
+    "win_rate": 0.751,
+    "profit_factor": 4.4675,
+    "total_return": 6.769844,
+    "cagr": 3.0823,
+    "sharpe": 1.7767,
+    "sortino": 2.0687,
+    "calmar": 9.2898,
+    "max_drawdown": -0.331791,
+    "ulcer_index": 0.180485,
+    "recovery_factor": 20.4039,
+    "time_under_water_pct": 86.47,
+    "avg_duration_bars": 16.7,
+    "exposure_pct": 96.15,
+    "total_costs": 266666.89,
+    "final_equity": 520393.85,
+    "peak_equity": 522047.4,
+    "elapsed_s": 4.0
+  },
+  "phase11_reference": {
+    "n_trades": 7007,
+    "n_wins": 5464,
+    "n_losses": 1543,
+    "win_rate": 0.7798,
+    "profit_factor": 5.9425,
+    "total_return": 34540943.9556,
+    "cagr": 47.9898,
+    "sharpe": 4.5976,
+    "sortino": 14.0033,
+    "calmar": 67.4146,
+    "max_drawdown": -0.711861,
+    "ulcer_index": 0.315628,
+    "recovery_factor": 48522058.5353,
+    "time_under_water_pct": 57.37,
+    "avg_duration_bars": 5.3,
+    "exposure_pct": 54.97,
+    "total_costs": 1111919559351.37,
+    "final_equity": 3454094495560.03,
+    "peak_equity": 3454094495560.03
+  },
+  "elapsed_s": 5.7
+}

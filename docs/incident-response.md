@@ -1,7 +1,7 @@
 # Protocolo de Respuesta ante Incidentes (OWASP)
 
 > Basado en `spec.md` §4. Define las 4 fases OWASP adaptadas al stack de
-> argos-bot: **Identificación → Contención → Erradicación → Recuperación**.
+> argos-ats: **Identificación → Contención → Erradicación → Recuperación**.
 >
 > Cada fase mapea a componentes concretos del código y tiene SLAs
 > asociados. El protocolo se activa cuando un detector automático o
@@ -115,7 +115,7 @@ gradual en < 1 hora desde la erradicación.
    ```bash
    health_health_check
    ```
-2. **Modo PAPER_TRADING primero**: Reactivar el bot en paper trading
+2. **Modo PAPER_TRADING primero**: Reactivar el ATS en paper trading
    durante 30 minutos:
    ```bash
    config_toggle_mode PAPER_TRADING

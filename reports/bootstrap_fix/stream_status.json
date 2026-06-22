@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-06-19T19:15:00Z",
+  "phase": "FASE 5 — Contract Pipeline Validation",
+  "expected_streams": {
+    "ticks:BTCUSDT": {
+      "purpose": "Raw tick data from DE's WebSocket feed",
+      "created_by": "data-engine → IngestTickUseCase → RedisProtocolBus",
+      "status": "must_exist",
+      "action": "log warning if missing"
+    },
+    "signals:trading": {
+      "purpose": "AE's trading signals for execution (new pipeline)",
+      "created_by": "analytics-engine → trading_loop → RedisProtocolBus",
+      "status": "expected_when_deployed",
+      "action": "log warning if missing (non-blocking)"
+    },
+    "orders:execution": {
+      "purpose": "Orders sent by AE to DE for execution (new pipeline)",
+      "created_by": "analytics-engine → execute_signal → RedisProtocolBus",
+      "status": "expected_when_deployed",
+      "action": "log warning if missing (non-blocking)"
+    },
+    "fills:execution": {
+      "purpose": "Fill confirmations from DE to AE (new pipeline)",
+      "created_by": "data-engine → order_consumer → RedisProtocolBus",
+      "status": "expected_when_deployed",
+      "action": "log warning if missing (non-blocking)"
+    }
+  },
+  "validation_mode": "WARN_ONLY — missing streams never block boot"
+}

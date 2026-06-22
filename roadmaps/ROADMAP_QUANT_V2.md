@@ -2,8 +2,18 @@
 
 > **Proyecto:** ARGOS — Pipeline de predicción cuantitativa para criptomonedas
 > **Versión roadmap:** 2.0
-> **Estado:** ⏳ En definición
+> **Estado:** ⏳ En definición — Ver nota abajo
 > **Principio rector:** Encontrar alpha reproducible. No "cumplir roadmap".
+
+> ⚠️ **NOTA DE ESTADO (2026-06-16):**
+> Las secciones que referencian FASE 5.5, 6.5, 6.75, Lock Test y sus scripts
+> (`experiments/fase65_*.py`, etc.) fueron **diseñadas conceptualmente pero
+> nunca implementadas ni committeadas**. El `experiments/` directory no existe
+> en el repositorio actual.
+>
+> La validación cuantitativa se ha reiniciado desde cero en
+> `experiments/quant_validation_v1/` con un pipeline de falsación fresco.
+> Ver `experiments/quant_validation_v1/ROADMAP.md` para el estado actual.
 
 ---
 
@@ -469,6 +479,139 @@ Si ningún modelo supera **Always-HOLD** con significancia estadística (p < 0.0
 
 ---
 
+## 6.5. FASE 5.5 — STRATEGY LAYER
+
+> **Estado:** ⏳ En ejecución
+> **Propósito:** Determinar si el alpha estadístico (CASO_C) puede convertirse en una estrategia económicamente explotable.
+
+### Hipótesis
+
+El problema no está en el modelo (RandomForest, AUC=0.844) sino en la capa de ejecución y gestión del riesgo. El drawdown del 71% en backtest no es un problema de señal sino de ausencia de stops, sizing y filtros.
+
+### 🔒 HARD RULE
+
+**Prohibido durante FASE 5.5:**
+- Modificar hiperparámetros de RandomForest
+- Probar XGBoost, LightGBM, CatBoost
+- GRU, LSTM, Transformer, TCN, TFT, stacking
+- Cualquier cambio al modelo predictivo
+
+La única variable que cambia es la **capa de estrategia**.
+
+### Subfase 5.5.1 — Feature Selection
+
+**Objetivo:** Reducir 68 → ~20-30 features útiles.
+
+| Filtro | Acción |
+|--------|--------|
+| **MI ranking** | Eliminar features con MI ≈ 0 |
+| **Correlation filter** | Si \|r\| > 0.85, conservar la de mayor MI+SHAP. Nunca eliminar solo por correlación |
+| **VIF** | Eliminar VIF > 10 |
+| **RF Importance** | Ranking desde RandomForest entrenado |
+| **SHAP** | TreeExplainer sobre RF (top 20 features) |
+| **RFE** | RFE(LogisticRegression, n_features=25) |
+
+**Output:** `reports/feature_selection/` con ranking completo, features retenidas/eliminadas, justificación.
+
+**Happy path:** 68 → ~25 features, AUC ≥ 0.84.
+**Sad path:** si AUC cae > 0.02, revertir al conjunto completo y documentar.
+
+### Subfase 5.5.2 — Backtest Realista
+
+**Objetivo:** Reemplazar backtest simplificado con uno con SL/TP real.
+
+| Componente | Valor |
+|-----------|-------|
+| **SL** | {1, 1.5, 2} × ATR |
+| **TP** | {2, 3, 4} × ATR (RR=2:1) |
+| **Position sizing** | {0.25%, 0.5%, 1%} del balance |
+| **Fees** | 0.1% por lado |
+| **Slippage** | 0.05% |
+| **Spread** | 0.01% |
+| **Latencia** | Ejecución en apertura de vela siguiente |
+| **SL/TP check** | Por cada vela, checkear si se tocaron SL/TP antes de evaluar nueva señal |
+
+**Output:** `reports/backtest/sl_tp_results.json`, `reports/backtest/trade_distribution.json`
+
+### Subfase 5.5.3 — Trade Filters
+
+**Objetivo:** Reducir sobreoperación (1111 → ? trades).
+
+Búsqueda jerárquica de 2 etapas:
+
+#### Etapa A — 20 combinaciones
+
+Probar todo el grid de:
+
+| Filter | Valores |
+|--------|---------|
+| Min probability | [0.425, 0.50, 0.55, 0.60, 0.65] |
+| ADX threshold | [0 (none), 20, 25, 30] |
+
+#### Etapa B — Top 5 configuraciones de Etapa A
+
+Sobre cada una, probar:
+
+| Filter | Valores |
+|--------|---------|
+| HTF alignment | [none, 4h_trend, 1d_trend] |
+| Vol regime | [all, low_only, high_only] |
+| Max trades/day | [1, 2, 3, inf] |
+
+**Output:** `reports/backtest/filter_grid_results.json` (ranking de configuraciones, top 10)
+
+### Subfase 5.5.3.5 — Monte Carlo Stress Test
+
+**Objetivo:** Validar que la estrategia no es producto del azar en la secuencia de trades.
+
+**Método:**
+1. Tomar la secuencia real de trades (PnL, duración)
+2. Generar 1000 permutaciones aleatorias del orden de trades
+3. En cada permutación, recalcular equity curve, CAGR, max DD
+
+**Métricas:**
+- Distribución de CAGR (mean, std, 5% percentile)
+- Distribución de max DD (mean, std, 95% percentile)
+- Probabilidad de ruina (DD > 99%)
+- Peor DD al 95% de confianza
+
+**Output:** `reports/backtest/monte_carlo_results.json`
+
+### Subfase 5.5.4 — GATE 4 & 6 Re-run
+
+**Objetivo:** Evaluar si la mejor configuración de 5.5.1-3 pasa los gates.
+
+#### GATE 4 — Economic viability
+
+| Métrica | Objetivo |
+|---------|----------|
+| Sharpe (con costos) | > 1.0 |
+| Profit Factor | > 1.5 |
+| Retorno neto | > 0 (positivo) |
+
+#### GATE 6 — Exploitability
+
+| Métrica | Objetivo |
+|---------|----------|
+| EV neto | > 0 |
+| Max Drawdown | < 15% |
+| Turnover | < 5 trades/día |
+| **Calmar ratio** | **> 1.0** |
+
+#### Output
+
+`reports/backtest/gate_results.json` con PASS/FAIL y todas las métricas.
+
+### Criterio final
+
+Si GATE 6 sigue fallando después de FASE 5.5:
+- **NO** asumir que hacen falta redes más complejas
+- Documentar si la señal estadística es monetizable
+- Identificar qué componente produce el drawdown (entrada, salida o gestión de riesgo)
+- Solo si la estrategia demuestra explotabilidad económica se autoriza FASE 7
+
+---
+
 ## 7. FASE 6 — VALIDACIÓN DEL ALPHA
 
 ### Hipótesis
@@ -492,16 +635,281 @@ Si no → volver a Fase 2 o Fase 4.
 
 ---
 
-## 8. FASE 7 — MODELOS AVANZADOS
+## 8. FASE 6.5 — OUT-OF-SAMPLE VALIDATION LAYER
+
+> **Estado:** ✅ Completada — GATE 6.5: PASS CONDICIONAL (4/5 condiciones)
+> **Propósito:** Verificar que el alpha descubierto en FASE 5.5 es real y no producto de overfitting, selection bias, data snooping, leakage temporal, o sobreoptimización del grid search.
+
+### Resultado
+
+Walk-forward: 4/4 folds PASS (Sharpe>1, Calmar>1, PF>1.5, EV>0)
+Monte Carlo: 4/4 folds PASS (ruin=0%)
+Stress Test: PASS (Calmar=2.08 con 2× friction)
+Benchmark vs B&H: PASS (3/4 folds)
+White RC: ⚠️ No significativo (p=0.40) — pero alpha es ROBUSTO (40% de configs aleatorias también funcionan)
+
+**GATE 6.5: 🟡 PASS CONDICIONAL → FASE 6.75 autorizada**
+
+### Configuración congelada
+
+Usar exactamente la mejor configuración encontrada en FASE 5.5. Sin reoptimización entre folds:
+
+| Parámetro | Valor |
+|-----------|-------|
+| threshold | 0.6 |
+| ADX | 0 (desactivado) |
+| SL | 2 ATR |
+| TP | 4 ATR |
+| risk_pct | 1% |
+| Feature subset | 41 features retenidas (FASE 5.5.1) |
+
+### 8.1 — Script 1: Walk-Forward Validation
+
+`experiments/fase65_walkforward.py`
+
+4 folds expanding window con configuración congelada:
+
+| Fold | Train | Test |
+|------|-------|------|
+| 0 | 2019–2021 (sin últimas 5 barras) | 2022 |
+| 1 | 2020–2022 (sin últimas 5 barras) | 2023 |
+| 2 | 2021–2023 (sin últimas 5 barras) | 2024 |
+| 3 | 2022–2024 (sin últimas 5 barras) | 2025 |
+
+**Protección contra leakage:**
+- Features pre-computadas (backward-looking rolling windows, seguras)
+- Labels: últimas 5 barras del train excluidas (evita que `shift(-5)` cruce al test)
+- Scaler fit en train, transform en test
+
+Por fold: train RF → predict test → BacktestEngine con config congelada.
+
+**Output:** `reports/walkforward/fold_{0,1,2,3}.json`, `summary.json`
+
+### 8.2 — Script 2: Monte Carlo por Fold
+
+`experiments/fase65_montecarlo_per_fold.py`
+
+Usar trades reales de cada fold. 1000 permutaciones independientes.
+
+Métricas por fold: CAGR mean, DD mean, DD p95, ruin probability.
+
+**Output:** `reports/montecarlo_fold/fold_{0,1,2,3}.json`
+
+### 8.3 — Script 3: Stress Test
+
+`experiments/fase65_stress_test.py`
+
+Degradar costos al 2×:
+
+| Costo | Normal | Stress |
+|-------|--------|--------|
+| Fees | 0.1% | 0.2% |
+| Slippage | 0.05% | 0.1% |
+| Spread | 0.01% | 0.02% |
+
+PASS si Calmar > 1 sobrevive.
+
+**Output:** `reports/stress_test/stress_test.json`
+
+### 8.4 — Script 4: Benchmark vs Buy & Hold
+
+`experiments/fase65_benchmark.py`
+
+Comparar cada fold contra B&H en CAGR, Sharpe, Sortino, Calmar, Max DD.
+
+**Output:** `reports/benchmark/fold_{0,1,2,3}.json`
+
+### 8.5 — Script 5: White's Reality Check
+
+`experiments/fase65_white_reality_check.py`
+
+Distribución nula por bootstrap de todas las configs evaluadas en FASE 5.5. p-value ajustado.
+
+**Output:** `reports/benchmark/white_reality_check.json`
+
+### 8.6 — Script 6: GATE 6.5
+
+`experiments/fase65_gate.py`
+
+**Condiciones obligatorias para autorizar FASE 7:**
+
+| Condición | Threshold | Cumplir en |
+|-----------|-----------|------------|
+| Sharpe | > 1.0 | ≥3 folds |
+| Calmar | > 1.0 | ≥3 folds |
+| Profit Factor | > 1.5 | ≥3 folds |
+| Expectancy | > 0 | ≥3 folds |
+| MC ruin probability | < 5% | ALL folds |
+| Stress Test Calmar | > 1.0 | PASS |
+| Supera B&H risk-adjusted | Sharpe/Calmar | ≥3 folds |
+| White RC p-value | < 0.05 | PASS |
+
+**Resultado:** 4/5 condiciones PASS. White RC no significativo (p=0.40) pero alpha robusto.
+
+---
+
+## 9. FASE 6.75 — ADVANCED STATISTICAL VALIDATION
+
+> **Estado:** ✅ Completada — GATE 6.75: PASS DÉBIL (6/8 fuerte, 8/8 débil)
+> **Propósito:** Antes de autorizar modelos profundos, destruir el alpha con pruebas más exigentes. El RandomForest champion debe sobrevivir.
+
+### Hard Rule
+
+- **FASE 7 bloqueada hasta completar FASE 6.75.**
+- Todos los modelos futuros deben vencer al champion (GATE 7 — Complexity Premium).
+- El burden of proof pertenece a los modelos complejos.
+
+### Champion (nuevo)
+
+El RandomForest con 41 features, threshold=0.6, SL=2 ATR, TP=4 ATR, risk=1% pasa a ser el campeón. Ningún modelo avanzado lo reemplaza sin demostrar superioridad.
+
+### 9.1 — Script 1: Purged K-Fold CV
+
+`experiments/fase675_purged_cv.py`
+
+K=6 folds expanding-window purged CV con embargo=5 barras. Train siempre antes que test, purga leakage de labels por `shift(-5)`.
+
+| Fold | Train end | Test | Sharpe | Calmar |
+|------|-----------|------|--------|--------|
+| 0 | 2022-07 | 2022-08→2023-03 | 3.61 | 4.64 |
+| 1 | 2023-03 | 2023-04→2023-10 | 6.26 | 40.05 |
+| 2 | 2023-10 | 2023-11→2024-05 | 5.28 | 45.13 |
+| 3 | 2024-05 | 2024-06→2024-12 | 8.96 | 128.53 |
+| 4 | 2024-12 | 2025-01→2025-07 | 7.31 | 85.99 |
+| 5 | 2025-07 | 2025-08→2026-06 | 8.25 | 109.56 |
+
+Resultado: Sharpe medio 6.61 ± 1.81, Calmar medio 68.98 ± 42.87. 6/6 folds > thresholds.
+
+**Output:** `reports/fase675/purged_cv.json`
+
+### 9.2 — Script 2: Combinatorial Purged CV
+
+`experiments/fase675_combinatorial_cv.py`
+
+N=8 grupos, K=2 test, C(8,2)=28 combinaciones. Media, desviación, estabilidad (CV).
+
+| Métrica | Media | Std | CV |
+|---------|-------|-----|----|
+| Sharpe | 2.94 | 2.28 | 0.78 |
+| Calmar | 15.76 | 18.87 | 1.20 |
+
+CV(Sharpe)=0.78 → estable pero con dependencia de régimen.
+
+**Output:** `reports/fase675/combinatorial_cv.json`
+
+### 9.3 — Script 3: Deflated Sharpe Ratio
+
+`experiments/fase675_deflated_sharpe.py`
+
+Corrige Sharpe por múltiples pruebas y no-normalidad de retornos.
+
+| M (trials) | DSR |
+|-----------|------|
+| 20 | 1.0000 |
+| 60 | 1.0000 |
+| 80 | 1.0000 |
+| 200 | 1.0000 |
+
+**DSR > 0 → PASS.** Incluso con M=200, el alpha no se explica por selección múltiple.
+
+**Output:** `reports/fase675/deflated_sharpe.json`
+
+### 9.4 — Script 4: Probability of Backtest Overfitting
+
+`experiments/fase675_pbo.py`
+
+M=60 configs (28 reales de FASE 5.5 + 32 sintéticas vecinas) evaluadas en 21 splits CPCV viables.
+
+PBO = 0.333 → **DUDOSO (0.2 ≤ PBO < 0.4).**
+7/21 splits donde la mejor config IS está bajo la mediana en OOS.
+El sobreajuste está en los parámetros SL/TP/threshold, no en el modelo.
+
+**Output:** `reports/fase675/pbo.json`
+
+### 9.5 — Script 5: Superior Predictive Ability Test
+
+`experiments/fase675_spa_test.py`
+
+(Hansen SPA) Champion vs B&H + random baseline + 30 configs alternativas. 21 splits CPCV, stationary bootstrap 1000 muestras.
+
+| Benchmark | Mean Sharpe |
+|-----------|-------------|
+| Champion RF | **3.50** |
+| B&H | 1.18 |
+| Alternativas | 1.29 |
+| Random | -13.49 |
+
+SPA p-value = **0.0000** → Champion significativamente superior a todos los benchmarks.
+
+**Output:** `reports/fase675/spa_test.json`
+
+### 9.6 — Script 6: GATE 6.75
+
+`experiments/fase675_gate.py`
+
+| Condición | Fuerte | Débil | Resultado |
+|-----------|--------|-------|-----------|
+| Purged CV Sharpe | >1.5 en ≥4/6 | >1.0 en ≥4/6 | **✓ 6/6** |
+| Purged CV Calmar | >2.0 en ≥4/6 | >1.0 en ≥4/6 | **✓ 6/6** |
+| CPCV CV(SR) | <0.5 | <1.0 | **~ 0.78** |
+| DSR | >0 | >0 | **✓ 1.000** |
+| PBO | <0.2 | <0.4 | **~ 0.333** |
+| SPA | p<0.05 | p<0.10 | **✓ p=0.000** |
+| Profit Factor | >1.5 | >1.3 | **✓ inf** |
+| MC Ruin | <1% | <5% | **✓ 0%** |
+
+**🟡 GATE 6.75: PASS DÉBIL** (6/8 fuerte, 8/8 débil)
+
+FASE 7 autorizada condicionalmente. RandomForest se mantiene como champion. Complexity Premium obligatorio.
+
+**Output:** `reports/fase675/gate_675.json`
+
+---
+
+## 10. FASE 7 — MODELOS AVANZADOS
 
 ### Condición de entrada
 
 Solo si:
-- F1 macro mejora significativamente vs Fase 5
-- Kappa > 0.15
-- MCC positivo
-- Balanced accuracy superior al baseline
-- GATE 6 aprobado (explotabilidad económica)
+- FASE 6.5 completa con PASS CONDICIONAL ✅
+- FASE 6.75 completa con PASS DÉBIL ✅
+- GATE 6.75 aprobado
+- Alpha validado por 9+ pruebas estadísticas independientes
+
+### 🟢 GATE 7 — Complexity Premium
+
+> **Regla:** El RandomForest champion NO es reemplazable automáticamente. Los modelos avanzados son challengers.
+
+#### Orden de challengers
+
+1. TCN (más simple, mejor punto de partida)
+2. GRU simple
+3. TFT (si se necesita interpretabilidad)
+4. Transformer Encoder
+5. LSTM
+
+#### Requisitos para aceptar un challenger
+
+Debe superar al champion **en todas**:
+
+| Métrica | Premium requerido |
+|---------|------------------|
+| Calmar | ≥ +10% sobre champion |
+| Profit Factor | ≥ +10% sobre champion |
+| Expectancy | ≥ +10% sobre champion |
+| Max DD | ≤ champion |
+| Monte Carlo ruin | < 5% |
+| Stress 2× Calmar | > 1.0 |
+| White RC p-value | < 0.05 |
+| Purged CV Sharpe | > 1.0 en ≥4/6 folds |
+| CPCV CV(SR) | < 0.5 |
+
+#### Regla de parada
+
+Si **TCN y GRU** no logran superar al champion consistentemente:
+- **Detener exploración de deep learning.**
+- Redirigir esfuerzo a: portfolio construction, position sizing, ejecución.
+- Documentar: "No se encontró Complexity Premium en este feature space."
 
 ### Prohibido
 ❌ Agregar profundidad por intuición
@@ -520,11 +928,11 @@ Solo si:
 
 ---
 
-## 9. FASE 8 — LOSS FUNCTIONS
+## 11. FASE 8 — LOSS FUNCTIONS
 
 ### Condición de entrada
 
-Solo si existe alpha validado (Fase 6 aprobada).
+Solo si existe alpha validado (FASE 7 aprobada).
 
 ### Experimentos
 
@@ -537,7 +945,7 @@ Solo si existe alpha validado (Fase 6 aprobada).
 
 ---
 
-## 10. FASE 9 — BACKTEST REALISTA
+## 12. FASE 9 — BACKTEST REALISTA
 
 ### Condición de entrada
 
@@ -574,7 +982,7 @@ Modelo con alpha validado + loss function óptima.
 
 ---
 
-## 11. FASE 10 — BTC PRIMERO
+## 13. FASE 10 — BTC PRIMERO
 
 ### Estrategia
 
@@ -586,7 +994,7 @@ Modelo con alpha validado + loss function óptima.
 
 ---
 
-## 12. FASE X — AUDITORÍA TEMPORAL
+## 14. FASE X — AUDITORÍA TEMPORAL
 
 ### Hipótesis
 

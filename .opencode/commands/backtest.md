@@ -3,7 +3,7 @@ description: Lanza una corrida de backtest con ENVIRONMENT_MODE=BACKTESTING y re
 agent: build
 ---
 
-You are executing a backtest run for the argos-bot project, as defined in @spec.md section 5 Historia 5 (Sad Path: `BACKTESTING`).
+You are executing a backtest run for the argos-ats project, as defined in @spec.md section 5 Historia 5 (Sad Path: `BACKTESTING`).
 
 Parameters from the user (all optional, defaults shown):
 - Symbol/pair: $1 (default: `BTCUSDT`)

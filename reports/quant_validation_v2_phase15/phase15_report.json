@@ -1,0 +1,152 @@
+{
+  "phase": "quant_validation_v2_phase15",
+  "training_window": [
+    "2023-06-01",
+    "2026-06-16"
+  ],
+  "model_params": {
+    "C": 0.1,
+    "class_weight": "balanced",
+    "solver": "liblinear",
+    "max_iter": 5000,
+    "random_state": 42
+  },
+  "results": {
+    "BTC": {
+      "n_rows": 26664,
+      "n_features": 53,
+      "label_distribution": {
+        "up_pct": 51.7,
+        "down_pct": 48.3,
+        "n_valid": 13944
+      },
+      "training_time_s": 0.1,
+      "train_metrics": {
+        "accuracy": 0.7714,
+        "f1": 0.7802,
+        "precision": 0.7876,
+        "recall": 0.7728,
+        "confusion_matrix": [
+          [
+            816,
+            244
+          ],
+          [
+            266,
+            905
+          ]
+        ]
+      },
+      "oos_metrics": {
+        "accuracy": 0.7652,
+        "f1": 0.7665,
+        "confusion_matrix": [
+          [
+            212,
+            72
+          ],
+          [
+            59,
+            215
+          ]
+        ],
+        "n_oos_samples": 558
+      },
+      "roundtrip_ok": true,
+      "roundtrip_match": "2789/2789",
+      "duration_s": 1.9,
+      "model_path": "/home/egraterol/projects/argos-bot/models/btc/model.pkl"
+    },
+    "ETH": {
+      "n_rows": 26664,
+      "n_features": 53,
+      "label_distribution": {
+        "up_pct": 50.9,
+        "down_pct": 49.1,
+        "n_valid": 14225
+      },
+      "training_time_s": 0.11,
+      "train_metrics": {
+        "accuracy": 0.7794,
+        "f1": 0.7873,
+        "precision": 0.7967,
+        "recall": 0.7781,
+        "confusion_matrix": [
+          [
+            845,
+            237
+          ],
+          [
+            265,
+            929
+          ]
+        ]
+      },
+      "oos_metrics": {
+        "accuracy": 0.7645,
+        "f1": 0.75,
+        "confusion_matrix": [
+          [
+            234,
+            69
+          ],
+          [
+            65,
+            201
+          ]
+        ],
+        "n_oos_samples": 569
+      },
+      "roundtrip_ok": true,
+      "roundtrip_match": "2845/2845",
+      "duration_s": 1.8,
+      "model_path": "/home/egraterol/projects/argos-bot/models/eth/model.pkl"
+    },
+    "SOL": {
+      "n_rows": 26664,
+      "n_features": 53,
+      "label_distribution": {
+        "up_pct": 51.0,
+        "down_pct": 49.0,
+        "n_valid": 15272
+      },
+      "training_time_s": 0.12,
+      "train_metrics": {
+        "accuracy": 0.775,
+        "f1": 0.7793,
+        "precision": 0.7869,
+        "recall": 0.7719,
+        "confusion_matrix": [
+          [
+            923,
+            263
+          ],
+          [
+            287,
+            971
+          ]
+        ]
+      },
+      "oos_metrics": {
+        "accuracy": 0.7692,
+        "f1": 0.7606,
+        "confusion_matrix": [
+          [
+            246,
+            72
+          ],
+          [
+            69,
+            224
+          ]
+        ],
+        "n_oos_samples": 611
+      },
+      "roundtrip_ok": true,
+      "roundtrip_match": "3055/3055",
+      "duration_s": 0.7,
+      "model_path": "/home/egraterol/projects/argos-bot/models/sol/model.pkl"
+    }
+  },
+  "timestamp": "2026-06-18 17:01:33"
+}
