@@ -69,3 +69,7 @@ data/
 
 # AI tooling generated (rebuild locally on clone)
 # skills-lock.json is committed (it's a lockfile, like package-lock.json)
+
+# Session tracking (AI agent runtime state)
+.session_id_*
+SESSION.*

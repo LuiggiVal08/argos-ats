@@ -15,6 +15,8 @@ from decimal import Decimal
 from typing import Awaitable, Callable
 from uuid import uuid4
 
+import structlog
+
 from ...domain.entities.position_manager import (
     PositionAction,
     PositionManager,
@@ -22,7 +24,10 @@ from ...domain.entities.position_manager import (
 from ...domain.entities.position_tracker import PositionTracker, TrackerVerdict
 from ...domain.value_objects.execution_report import ExecutionReport
 from ...domain.value_objects.live_position import LivePosition
+from ...domain.value_objects.order import OrderSide
 from ..ports.execution_logger import ExecutionLogger
+
+log = structlog.get_logger()
 from ..ports.exchange_order_client import ExchangeOrderClient
 from ..ports.position_repository import PositionRepository
 
@@ -234,6 +239,48 @@ class MonitorPositionsUseCase:
                 is_trail = decision.action == PositionAction.ACTIVATE_TRAIL
                 new_sl = decision.new_sl_price
 
+                sl_side = (
+                    OrderSide.SELL if pos.side is OrderSide.BUY else OrderSide.BUY
+                )
+
+                # Place new SL FIRST, then cancel old only if new succeeds.
+                # CRITICAL: never cancel old SL before new SL is confirmed.
+                new_sl_order_id: str | None = None
+                if new_sl is not None:
+                    try:
+                        sl_result = await self._exchange.place_stop_loss_order(
+                            symbol=pos.symbol,
+                            side=sl_side,
+                            amount=pos.units,
+                            stop_price=new_sl,
+                        )
+                        new_sl_order_id = sl_result.id
+                    except Exception as e:
+                        log.critical(
+                            "sl_update_failed_new_sl_not_placed",
+                            position_id=pos.position_id,
+                            new_sl=str(new_sl),
+                            old_sl_order_id=pos.sl_order_id,
+                            error=str(e),
+                        )
+                        # Keep old SL intact — do NOT cancel it.
+                        # Skip this update entirely; next monitor run will retry.
+                        continue
+
+                # New SL confirmed on exchange — safe to cancel old.
+                if pos.sl_order_id:
+                    try:
+                        await self._exchange.cancel_order(
+                            pos.sl_order_id, pos.symbol
+                        )
+                    except Exception as e:
+                        log.warning(
+                            "cancel_old_sl_failed",
+                            position_id=pos.position_id,
+                            sl_order_id=pos.sl_order_id,
+                            error=str(e),
+                        )
+
                 updated_pos = LivePosition(
                     position_id=pos.position_id,
                     symbol=pos.symbol,
@@ -246,9 +293,9 @@ class MonitorPositionsUseCase:
                     tp2_price=pos.tp2_price,
                     tp3_price=pos.tp3_price,
                     trail_activated=is_trail or pos.trail_activated,
-                    trail_offset=pos.trail_offset or (
+                    trail_offset=(
                         atr * Decimal("1.5") if atr else pos.atr_at_entry
-                    ) if is_trail else pos.trail_offset,
+                    ) if is_trail and pos.trail_offset is None else pos.trail_offset,
                     break_even_activated=is_be or pos.break_even_activated,
                     atr_at_entry=pos.atr_at_entry,
                     initial_units=pos.initial_units,
@@ -256,6 +303,8 @@ class MonitorPositionsUseCase:
                     tp2_pct=pos.tp2_pct,
                     opened_at=pos.opened_at,
                     status="OPEN",
+                    sl_order_id=new_sl_order_id or pos.sl_order_id,
+                    tp_order_id=pos.tp_order_id,
                 )
                 await self._position_repo.save(updated_pos)
 
@@ -271,6 +320,7 @@ class MonitorPositionsUseCase:
                     "action": decision.action.value,
                     "new_sl": str(new_sl) if new_sl else None,
                     "reason": decision.reason,
+                    "sl_order_id": new_sl_order_id,
                 })
 
         return MonitorResult(

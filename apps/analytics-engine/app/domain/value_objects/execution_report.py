@@ -39,6 +39,7 @@ class ExecutionReport:
     pnl: Decimal | None = None
     order_id: str = ""
     position_id: str = ""
+    lineage_id: str = ""
     errors: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = field(default_factory=dict)

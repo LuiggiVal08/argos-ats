@@ -23,6 +23,7 @@ import ccxt.async_support as ccxt
 import structlog
 
 from fastapi import Request
+from pathlib import Path
 
 from .application.ports.multi_symbol_consolidator import (
     MultiSymbolConsolidator,
@@ -56,6 +57,8 @@ from .application.ports.model_trainer import ModelTrainer
 from .application.ports.notifier import Notifier
 from .application.ports.incident_repository import IncidentRepository
 from .application.ports.position_repository import PositionRepository
+from .application.ports.execution_gate import ExecutionGate
+from .application.ports.trading_engine import TradingEngine
 from .application.use_cases.check_drawdown import CheckDrawdownUseCase
 from .application.use_cases.build_dataset import BuildDatasetUseCase
 from .application.use_cases.collect_telemetry import (
@@ -129,6 +132,9 @@ from .infrastructure.exchange.ccxt_order_client import CcxtOrderClient
 from .infrastructure.trading.ccxt_binance_adapter import (
     CcxtBinanceTestnetAdapter,
 )
+from .infrastructure.trading.execution_gate import SourceExecutionGate
+from .infrastructure.trading.trading_engine import LiveTradingEngine
+from .infrastructure.repositories.idempotency_store import SQLiteExecutionIdempotencyStore
 from .domain.value_objects.atr import Atr
 from .infrastructure.indicators.ta_atr_calculator import TaAtrCalculator
 from .infrastructure.backtest.file_reporter import FileBacktestReporter
@@ -166,10 +172,21 @@ from .infrastructure.training.walk_forward_runner_impl import SimpleWalkForwardR
 if TYPE_CHECKING:
     import pandas as pd
     from fastapi import Request
+    from .infrastructure.trading.candle_builder import CandleBuffer, CandleBuilder
+    from .infrastructure.trading.streaming_inference import StreamingInferencePipeline
+    from .infrastructure.trading.streaming_signal_processor import StreamingSignalProcessor
 
 log = structlog.get_logger()
 
 OhlcvSource = Callable[[str, str, int], Awaitable["pd.DataFrame"]]
+
+
+@dataclass
+class StreamingComponents:
+    candle_builder: "CandleBuilder"
+    candle_buffer: "CandleBuffer"
+    inference_pipeline: "StreamingInferencePipeline"
+    signal_processor: "StreamingSignalProcessor"
 
 
 @dataclass
@@ -191,6 +208,14 @@ class Composition:
     mode: str
     notifier: Notifier
     notify_on_event: NotifyOnEventUseCase
+    execution_gate: ExecutionGate | None = None
+    trading_engine: TradingEngine | None = None
+    streaming: StreamingComponents | None = None
+    position_repo: PositionRepository | None = None
+    system_snapshot_repo: Any | None = None
+    stream_barrier: Any | None = None
+    idempotency_store: Any | None = None
+    drift_watchdog: Any | None = None
 
 
 def _env_mode() -> str:
@@ -409,12 +434,26 @@ def build_composition() -> Composition:
     if mode == "BACKTESTING":
         trade_journal: TradeJournal = InMemoryTradeJournal()
         snapshot_repo: DrawdownSnapshotRepo = InMemorySnapshotRepo()
+        position_repo: PositionRepository = InMemoryPositionRepository()
+        system_snapshot_repo: Any = None
     else:
-        # PAPER/LIVE use the same in-memory adapters for the journal
-        # + snapshot (persistent stores are H3-FU1). The order
-        # client and env-mode writer differ.
         trade_journal = InMemoryTradeJournal()
         snapshot_repo = InMemorySnapshotRepo()
+        position_repo = InMemoryPositionRepository()
+        system_snapshot_repo = None
+
+    # Stream barrier + idempotency (Fase 1 backpressure)
+    if mode == "BACKTESTING":
+        from .domain.recovery.stream_barrier import StreamConsumptionBarrier
+        stream_barrier: StreamConsumptionBarrier | None = None
+        idempotency_store: Any = None
+    else:
+        from .domain.recovery.stream_barrier import StreamConsumptionBarrier
+        from .infrastructure.repositories.idempotency_store import (
+            SQLiteExecutionIdempotencyStore,
+        )
+        stream_barrier = StreamConsumptionBarrier()
+        idempotency_store = SQLiteExecutionIdempotencyStore()
 
     env_writer: EnvironmentModeWriter = FileEnvironmentModeWriter()
     (
@@ -443,6 +482,9 @@ def build_composition() -> Composition:
     )
     list_incidents_uc = ListIncidentsUseCase(repo=incident_repo)
 
+    # H1 (Fase 1) — ExecutionGate + TradingEngine control plane
+    gate = SourceExecutionGate()
+
     # H6 wiring — Notifications (publish events to Redis stream)
     if mode == "BACKTESTING":
         notifier: Notifier = LoggingNotifier()
@@ -453,6 +495,58 @@ def build_composition() -> Composition:
         channels.append(RedisNotifier(redis_url=redis_url))
         notifier = CompositeNotifier(channels)
     notify_on_event_uc = NotifyOnEventUseCase(notifier=notifier)
+
+    # Drift watchdog (PAPER/LIVE only)
+    if mode == "BACKTESTING":
+        drift_watchdog: Any = None
+    else:
+        from .application.services.drift_watchdog import LiveDriftWatchdog
+        from .infrastructure.exchange.ccxt_position_provider import (
+            CcxtExchangePositionProvider,
+        )
+        if exchange is not None:
+            exchange_provider = CcxtExchangePositionProvider(
+                exchange=exchange,
+                symbols=(os.environ.get("SYMBOL", "BTC/USDT"),),
+            )
+            drift_watchdog = LiveDriftWatchdog(
+                position_repo=position_repo,
+                exchange_provider=exchange_provider,
+                trade_journal=trade_journal,
+                check_interval_seconds=300.0,
+                equity_provider=CcxtBalanceProvider(exchange) if mode != "BACKTESTING" else None,
+            )
+        else:
+            drift_watchdog = None
+
+    # Streaming inference components (PAPER/LIVE only)
+    if mode == "BACKTESTING":
+        streaming: StreamingComponents | None = None
+    else:
+        from .infrastructure.trading.candle_builder import CandleBuilder, CandleBuffer
+        from .infrastructure.trading.streaming_inference import StreamingInferencePipeline
+        from .infrastructure.trading.streaming_signal_processor import (
+            StreamingSignalProcessor,
+        )
+        from .infrastructure.exchange.funding_rate_provider import FundingRateProvider
+        symbol = os.environ.get("SYMBOL", "BTC/USDT")
+        models_dir = Path(__file__).resolve().parent.parent / "models"
+        funding_provider = FundingRateProvider(exchange) if exchange else None
+        candle_builder = CandleBuilder(symbol=symbol, timeframe_seconds=3600)
+        candle_buffer = CandleBuffer(maxlen=2000)
+        inference_pipeline = StreamingInferencePipeline(
+            symbol=symbol,
+            inference_timeframe="1h",
+            checkpoint_base=models_dir,
+            additional_feature_provider=funding_provider,
+        )
+        signal_processor = StreamingSignalProcessor(symbol=symbol)
+        streaming = StreamingComponents(
+            candle_builder=candle_builder,
+            candle_buffer=candle_buffer,
+            inference_pipeline=inference_pipeline,
+            signal_processor=signal_processor,
+        )
 
     return Composition(
         compute_position_size=compute_position_size,
@@ -472,6 +566,13 @@ def build_composition() -> Composition:
         mode=mode,
         notifier=notifier,
         notify_on_event=notify_on_event_uc,
+        execution_gate=gate,
+        streaming=streaming,
+        position_repo=position_repo,
+        system_snapshot_repo=system_snapshot_repo,
+        stream_barrier=stream_barrier,
+        idempotency_store=idempotency_store,
+        drift_watchdog=drift_watchdog,
     )
 
 
@@ -987,6 +1088,26 @@ class _CcxtOhlcvAdapter:
         return df.to_dict("records")
 
 
+# Fase 1 — Trading Engine (cached in app.state) -------------------------------
+
+
+def get_trading_engine_usecase(request: Request) -> LiveTradingEngine:
+    cached: LiveTradingEngine | None = getattr(
+        request.app.state, "trading_engine", None
+    )
+    if cached is not None:
+        return cached
+
+    comp = _comp(request)
+    execute_uc = get_execute_signal_usecase(request)
+    gate = comp.execution_gate
+    if gate is None:
+        raise RuntimeError("execution_gate not wired in composition")
+    engine = LiveTradingEngine(gate=gate, use_case=execute_uc)
+    request.app.state.trading_engine = engine
+    return engine
+
+
 # H7 — Live Execution Engine (cached in app.state) ----------------------------
 
 
@@ -1027,6 +1148,11 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
     position_repo = get_position_repo(request)
     execution_logger = StructlogExecutionLogger()
 
+    if comp.mode == "BACKTESTING":
+        idempotency_store = None
+    else:
+        idempotency_store = SQLiteExecutionIdempotencyStore()
+
     use_case = ExecuteSignalUseCase(
         signal_validator=validator,
         balance_provider=balance_provider,
@@ -1035,6 +1161,7 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
         position_repo=position_repo,
         execution_logger=execution_logger,
         is_halted=drawdown_checker,
+        idempotency_store=idempotency_store,
     )
     request.app.state.execute_signal_usecase = use_case
     return use_case
