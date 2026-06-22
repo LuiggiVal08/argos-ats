@@ -56,6 +56,8 @@ from .application.ports.model_trainer import ModelTrainer
 from .application.ports.notifier import Notifier
 from .application.ports.incident_repository import IncidentRepository
 from .application.ports.position_repository import PositionRepository
+from .application.ports.execution_gate import ExecutionGate
+from .application.ports.trading_engine import TradingEngine
 from .application.use_cases.check_drawdown import CheckDrawdownUseCase
 from .application.use_cases.build_dataset import BuildDatasetUseCase
 from .application.use_cases.collect_telemetry import (
@@ -129,6 +131,8 @@ from .infrastructure.exchange.ccxt_order_client import CcxtOrderClient
 from .infrastructure.trading.ccxt_binance_adapter import (
     CcxtBinanceTestnetAdapter,
 )
+from .infrastructure.trading.execution_gate import SourceExecutionGate
+from .infrastructure.trading.trading_engine import LiveTradingEngine
 from .domain.value_objects.atr import Atr
 from .infrastructure.indicators.ta_atr_calculator import TaAtrCalculator
 from .infrastructure.backtest.file_reporter import FileBacktestReporter
@@ -191,6 +195,8 @@ class Composition:
     mode: str
     notifier: Notifier
     notify_on_event: NotifyOnEventUseCase
+    execution_gate: ExecutionGate | None = None
+    trading_engine: TradingEngine | None = None
 
 
 def _env_mode() -> str:
@@ -443,6 +449,9 @@ def build_composition() -> Composition:
     )
     list_incidents_uc = ListIncidentsUseCase(repo=incident_repo)
 
+    # H1 (Fase 1) — ExecutionGate + TradingEngine control plane
+    gate = SourceExecutionGate()
+
     # H6 wiring — Notifications (publish events to Redis stream)
     if mode == "BACKTESTING":
         notifier: Notifier = LoggingNotifier()
@@ -472,6 +481,7 @@ def build_composition() -> Composition:
         mode=mode,
         notifier=notifier,
         notify_on_event=notify_on_event_uc,
+        execution_gate=gate,
     )
 
 
@@ -985,6 +995,26 @@ class _CcxtOhlcvAdapter:
     ) -> list[dict]:
         df = await ccxt_ohlcv_source(self._exchange, symbol, timeframe, limit)
         return df.to_dict("records")
+
+
+# Fase 1 — Trading Engine (cached in app.state) -------------------------------
+
+
+def get_trading_engine_usecase(request: Request) -> LiveTradingEngine:
+    cached: LiveTradingEngine | None = getattr(
+        request.app.state, "trading_engine", None
+    )
+    if cached is not None:
+        return cached
+
+    comp = _comp(request)
+    execute_uc = get_execute_signal_usecase(request)
+    gate = comp.execution_gate
+    if gate is None:
+        raise RuntimeError("execution_gate not wired in composition")
+    engine = LiveTradingEngine(gate=gate, use_case=execute_uc)
+    request.app.state.trading_engine = engine
+    return engine
 
 
 # H7 — Live Execution Engine (cached in app.state) ----------------------------
