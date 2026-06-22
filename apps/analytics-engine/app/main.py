@@ -27,6 +27,7 @@ from .api import (
     observability_router,
     order_router,
     risk_router,
+    shadow_router,
     training_router,
 )
 from .composition import Composition, build_composition
@@ -46,6 +47,7 @@ app.include_router(execution_router)
 app.include_router(notification_router)
 app.include_router(training_router)
 app.include_router(observability_router)
+app.include_router(shadow_router)
 
 
 @asynccontextmanager
@@ -163,7 +165,10 @@ async def lifespan(_: FastAPI):
             t7 = asyncio.create_task(
                 _phase_b_loop(phase_b_tracker)
             )
-            streaming_tasks = [t1, t2, t3, t5, t6, t7]
+            t9 = asyncio.create_task(
+                _shadow_outcome_loop(redis_client, comp, symbol)
+            )
+            streaming_tasks = [t1, t2, t3, t5, t6, t7, t9]
 
             t4 = asyncio.create_task(
                 _system_diagnostics_loop(comp, health_collector, redis_client, streaming_tasks)
@@ -445,6 +450,25 @@ async def _decision_loop(
                     model=result.model_version,
                 )
 
+                # H63: fire-and-forget shadow decision recording
+                if redis_client is not None:
+                    from .infrastructure.shadow.shadow_producer import (
+                        produce_shadow_decision,
+                    )
+                    asyncio.create_task(
+                        produce_shadow_decision(
+                            redis_client,
+                            symbol,
+                            result.signal.side.value,
+                            result.ensemble_confidence,
+                            result.candle_close,
+                            candles[-1] if candles else {},
+                            int(candles[-1].get("timestamp", 0)) if candles else 0,
+                            result.model_version,
+                            result.regime,
+                        )
+                    )
+
                 proc_result = streaming.signal_processor.process(
                     result.signal,
                     price=Decimal(str(result.candle_close)),
@@ -514,6 +538,24 @@ async def _decision_loop(
         raise
 
 
+
+
+async def _shadow_outcome_loop(
+    redis_client: Any,
+    comp: Composition,
+    symbol: str,
+) -> None:
+    """Loop 4: periodically evaluate shadow decisions against market outcome."""
+    from .infrastructure.shadow.shadow_outcome_worker import (
+        shadow_outcome_worker_loop,
+    )
+
+    assert comp.streaming is not None
+    await shadow_outcome_worker_loop(
+        client=redis_client,
+        candle_buffer=comp.streaming.candle_buffer,
+        symbol=symbol,
+    )
 
 
 async def _position_monitor_loop(
