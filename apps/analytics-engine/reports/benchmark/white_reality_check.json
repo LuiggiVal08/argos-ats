@@ -1,0 +1,32 @@
+{
+  "best_config": {
+    "threshold": 0.6,
+    "sl_mult": 2.0,
+    "tp_mult": 4.0,
+    "risk_pct": 0.01,
+    "adx_threshold": 0
+  },
+  "best_calmar": 34.335150564159854,
+  "best_metrics": {
+    "sharpe": 6.498275826946203,
+    "total_return_pct": 93.17902784810434,
+    "n_trades": 186,
+    "max_dd_pct": 2.7235693942485355,
+    "profit_factor": 4.568006636573801
+  },
+  "n_bootstrap": 30,
+  "random_calmar_distribution": {
+    "mean": 34.70495831081703,
+    "std": 35.994766982386665,
+    "max": 186.2847523513508,
+    "min": -0.2996173277082233,
+    "p50": 21.21980132706955,
+    "p75": 44.926333645689745,
+    "p90": 63.34962985531712,
+    "p95": 86.0168965315759,
+    "p99": 158.7377180289015
+  },
+  "p_value": 0.4,
+  "significant": false,
+  "elapsed_seconds": 365.94369173049927
+}

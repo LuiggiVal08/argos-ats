@@ -1,0 +1,98 @@
+{
+  "symbol": "ETH/USDT",
+  "version": "v1.0.1781549314",
+  "meta_accuracy": 0.517423342048966,
+  "n_predictions": 28032,
+  "timestamp": "2026-06-15T21:43:14.092502+00:00",
+  "checks": {
+    "class_distribution": {
+      "status": "PASS",
+      "counts": {
+        "BUY": 6701,
+        "SELL": 7354,
+        "HOLD": 13977
+      },
+      "percentages": {
+        "BUY": 0.239,
+        "SELL": 0.2623,
+        "HOLD": 0.4986
+      }
+    },
+    "confusion_matrix": {
+      "status": "FAIL",
+      "matrix": [
+        [
+          63,
+          17,
+          6621
+        ],
+        [
+          32,
+          6,
+          7316
+        ],
+        [
+          40,
+          7,
+          13930
+        ]
+      ],
+      "labels": [
+        "BUY",
+        "SELL",
+        "HOLD"
+      ],
+      "precision": {
+        "BUY": 0.4667,
+        "SELL": 0.2,
+        "HOLD": 0.4999
+      },
+      "recall": {
+        "BUY": 0.0094,
+        "SELL": 0.0008,
+        "HOLD": 0.9966
+      },
+      "f1": {
+        "BUY": 0.0184,
+        "SELL": 0.0016,
+        "HOLD": 0.6658
+      },
+      "accuracy": 0.4994,
+      "avg_f1": 0.2286
+    },
+    "probability_stats": {
+      "status": "PASS",
+      "mean_probs": [
+        0.2272,
+        0.2568,
+        0.516
+      ],
+      "std_probs": [
+        0.0599,
+        0.0441,
+        0.0959
+      ]
+    },
+    "confidence": {
+      "mean": 0.5164,
+      "std": 0.0954,
+      "p95": 0.6997
+    },
+    "accuracy_by_confidence": {
+      "regimes": {
+        "LOW_CONFIDENCE": {
+          "count": 554,
+          "accuracy": 0.3448
+        },
+        "MID_CONFIDENCE": {
+          "count": 21422,
+          "accuracy": 0.4526
+        },
+        "HIGH_CONFIDENCE": {
+          "count": 6056,
+          "accuracy": 0.6792
+        }
+      }
+    }
+  }
+}

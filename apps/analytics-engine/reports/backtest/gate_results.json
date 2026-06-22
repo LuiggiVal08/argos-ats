@@ -1,0 +1,105 @@
+{
+  "gates": [
+    {
+      "config": {
+        "sl_mult": 2.0,
+        "tp_mult": 4.0,
+        "risk_pct": 0.01,
+        "label": "2/4 ATR 1%"
+      },
+      "gate_4": {
+        "gate": 4,
+        "metric": 48.769231037783506,
+        "threshold": 1.0,
+        "passed": true
+      },
+      "gate_6": {
+        "gate": 6,
+        "strategy_return": 6514.938730696835,
+        "buy_and_hold_return": 42.19625588320337,
+        "max_dd": 3.200733077083969,
+        "dd_threshold": 40.0,
+        "better_than_bh": "True",
+        "dd_ok": true,
+        "passed": true
+      }
+    },
+    {
+      "config": {
+        "sl_mult": 2.0,
+        "tp_mult": 4.0,
+        "risk_pct": 0.005,
+        "label": "2/4 ATR 0.5%"
+      },
+      "gate_4": {
+        "gate": 4,
+        "metric": 37.48872207387313,
+        "threshold": 1.0,
+        "passed": true
+      },
+      "gate_6": {
+        "gate": 6,
+        "strategy_return": 718.090535815311,
+        "buy_and_hold_return": 42.19625588320337,
+        "max_dd": 1.6068932670249823,
+        "dd_threshold": 40.0,
+        "better_than_bh": "True",
+        "dd_ok": true,
+        "passed": true
+      }
+    },
+    {
+      "config": {
+        "sl_mult": 1.5,
+        "tp_mult": 3.0,
+        "risk_pct": 0.01,
+        "label": "1.5/3 ATR 1%"
+      },
+      "gate_4": {
+        "gate": 4,
+        "metric": 54.869108033472905,
+        "threshold": 1.0,
+        "passed": true
+      },
+      "gate_6": {
+        "gate": 6,
+        "strategy_return": 18108.506218465714,
+        "buy_and_hold_return": 42.19625588320337,
+        "max_dd": 4.035184764254763,
+        "dd_threshold": 40.0,
+        "better_than_bh": "True",
+        "dd_ok": true,
+        "passed": true
+      }
+    }
+  ],
+  "buy_and_hold": {
+    "total_return_pct": 42.19625588320337,
+    "cagr": 8.217610651854223,
+    "years": 4.457648401826484
+  },
+  "overall_pass": true,
+  "best_config": {
+    "config": {
+      "sl_mult": 1.5,
+      "tp_mult": 3.0,
+      "risk_pct": 0.01,
+      "label": "1.5/3 ATR 1%"
+    },
+    "result": {
+      "n_trades": 1754,
+      "win_rate": 0.7206385404789054,
+      "total_return_pct": 18108.506218465714,
+      "sharpe": 9.320655191323963,
+      "max_dd_pct": 4.035184764254763,
+      "calmar": 54.869108033472905,
+      "profit_factor": 7.778937056732175,
+      "sortino": 4.6817210005754575,
+      "cagr": 221.40698876491848,
+      "expectancy": 1032.4119850892655,
+      "max_consecutive_losses": 7,
+      "turnover_per_day": 1.0780301672257933
+    }
+  },
+  "elapsed_seconds": 15.1798837184906
+}

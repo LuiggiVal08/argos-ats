@@ -1,0 +1,98 @@
+{
+  "symbol": "AVAX/USDT",
+  "version": "v1.0.1781557604",
+  "meta_accuracy": 0.49137152365105774,
+  "n_predictions": 28032,
+  "timestamp": "2026-06-15T21:43:14.225618+00:00",
+  "checks": {
+    "class_distribution": {
+      "status": "PASS",
+      "counts": {
+        "BUY": 7080,
+        "SELL": 7672,
+        "HOLD": 13280
+      },
+      "percentages": {
+        "BUY": 0.2526,
+        "SELL": 0.2737,
+        "HOLD": 0.4737
+      }
+    },
+    "confusion_matrix": {
+      "status": "WARNING",
+      "matrix": [
+        [
+          118,
+          826,
+          6136
+        ],
+        [
+          40,
+          1107,
+          6525
+        ],
+        [
+          8,
+          631,
+          12641
+        ]
+      ],
+      "labels": [
+        "BUY",
+        "SELL",
+        "HOLD"
+      ],
+      "precision": {
+        "BUY": 0.7108,
+        "SELL": 0.4317,
+        "HOLD": 0.4996
+      },
+      "recall": {
+        "BUY": 0.0167,
+        "SELL": 0.1443,
+        "HOLD": 0.9519
+      },
+      "f1": {
+        "BUY": 0.0326,
+        "SELL": 0.2163,
+        "HOLD": 0.6553
+      },
+      "accuracy": 0.4946,
+      "avg_f1": 0.3014
+    },
+    "probability_stats": {
+      "status": "PASS",
+      "mean_probs": [
+        0.2385,
+        0.2944,
+        0.4671
+      ],
+      "std_probs": [
+        0.0533,
+        0.0502,
+        0.0894
+      ]
+    },
+    "confidence": {
+      "mean": 0.4718,
+      "std": 0.0835,
+      "p95": 0.6224
+    },
+    "accuracy_by_confidence": {
+      "regimes": {
+        "LOW_CONFIDENCE": {
+          "count": 6375,
+          "accuracy": 0.3656
+        },
+        "MID_CONFIDENCE": {
+          "count": 18861,
+          "accuracy": 0.4974
+        },
+        "HIGH_CONFIDENCE": {
+          "count": 2796,
+          "accuracy": 0.77
+        }
+      }
+    }
+  }
+}

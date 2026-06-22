@@ -1,0 +1,98 @@
+{
+  "symbol": "DOGE/USDT",
+  "version": "v1.0.1781555468",
+  "meta_accuracy": 0.5111480865224626,
+  "n_predictions": 28032,
+  "timestamp": "2026-06-15T21:43:14.193437+00:00",
+  "checks": {
+    "class_distribution": {
+      "status": "PASS",
+      "counts": {
+        "BUY": 6688,
+        "SELL": 7451,
+        "HOLD": 13893
+      },
+      "percentages": {
+        "BUY": 0.2386,
+        "SELL": 0.2658,
+        "HOLD": 0.4956
+      }
+    },
+    "confusion_matrix": {
+      "status": "WARNING",
+      "matrix": [
+        [
+          213,
+          893,
+          5582
+        ],
+        [
+          218,
+          1022,
+          6211
+        ],
+        [
+          127,
+          560,
+          13206
+        ]
+      ],
+      "labels": [
+        "BUY",
+        "SELL",
+        "HOLD"
+      ],
+      "precision": {
+        "BUY": 0.3817,
+        "SELL": 0.4129,
+        "HOLD": 0.5283
+      },
+      "recall": {
+        "BUY": 0.0318,
+        "SELL": 0.1372,
+        "HOLD": 0.9506
+      },
+      "f1": {
+        "BUY": 0.0587,
+        "SELL": 0.206,
+        "HOLD": 0.6792
+      },
+      "accuracy": 0.5152,
+      "avg_f1": 0.3146
+    },
+    "probability_stats": {
+      "status": "PASS",
+      "mean_probs": [
+        0.232,
+        0.2752,
+        0.4928
+      ],
+      "std_probs": [
+        0.0649,
+        0.0595,
+        0.1078
+      ]
+    },
+    "confidence": {
+      "mean": 0.5005,
+      "std": 0.0971,
+      "p95": 0.6844
+    },
+    "accuracy_by_confidence": {
+      "regimes": {
+        "LOW_CONFIDENCE": {
+          "count": 4546,
+          "accuracy": 0.3322
+        },
+        "MID_CONFIDENCE": {
+          "count": 19071,
+          "accuracy": 0.5003
+        },
+        "HIGH_CONFIDENCE": {
+          "count": 4415,
+          "accuracy": 0.7678
+        }
+      }
+    }
+  }
+}

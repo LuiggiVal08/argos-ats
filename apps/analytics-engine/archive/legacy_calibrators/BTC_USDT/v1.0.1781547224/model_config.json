@@ -1,0 +1,40 @@
+{
+  "lookback": 20,
+  "confidence_threshold": 0.7,
+  "layers": [
+    128,
+    64,
+    32,
+    16
+  ],
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "rsi",
+    "ema_fast",
+    "ema_medium",
+    "ema_slow",
+    "macd",
+    "macd_signal",
+    "macd_hist",
+    "bb_upper",
+    "bb_middle",
+    "bb_lower",
+    "atr",
+    "adx",
+    "obv",
+    "volume_sma",
+    "pct_change"
+  ],
+  "target_lookahead": 5,
+  "target_return_pct": 1.0,
+  "dropout_rate": 0.2,
+  "batch_size": 32,
+  "max_epochs": 20,
+  "early_stop_patience": 4,
+  "label_method": "triple_barrier",
+  "atr_multiplier": 1.5
+}
