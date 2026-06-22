@@ -1,12 +1,15 @@
-"""CcxtBinanceTestnetAdapter: ExchangeOrderClient + PriceProvider para Binance Spot Testnet.
+"""CcxtBinanceTestnetAdapter: ExchangeOrderClient + PriceProvider para Binance Futures Demo.
 
-Usa ccxt.async_support con set_sandbox_mode(True).
+Usa ccxt.async_support con enable_demo_trading(True).
+El exchange ID se lee de EXCHANGE_ID (default: binanceusdm).
 Las credenciales se leen de env vars BINANCE_TESTNET_API_KEY / BINANCE_TESTNET_SECRET.
 """
 from __future__ import annotations
 
 import asyncio
 import os
+
+import structlog
 import random
 from decimal import Decimal
 from typing import Any
@@ -27,12 +30,14 @@ from ...domain.value_objects.order import (
     OrderType,
 )
 
+log = structlog.get_logger()
+
 
 class CcxtBinanceTestnetAdapter:
-    """Adaptador para Binance Spot Testnet.
+    """Adaptador para Binance Futures Demo.
 
     Implementa ExchangeOrderClient para colocar, monitorear y cerrar
-    posiciones en Spot. Tambien sirve como PriceProvider via get_price().
+    posiciones en futuros. Tambien sirve como PriceProvider via get_price().
 
     Toda llamada que falle por red/timeout/auth levanta
     ExchangeOrderClientError.
@@ -48,14 +53,16 @@ class CcxtBinanceTestnetAdapter:
         sl_retry_base_ms: float = 100.0,
     ) -> None:
         if exchange is None:
+            ex_id = os.environ.get("EXCHANGE_ID", "binanceusdm")
+            exchange_cls = getattr(ccxt, ex_id, ccxt.binanceusdm)
             api_key = os.environ["BINANCE_TESTNET_API_KEY"]
             api_secret = os.environ["BINANCE_TESTNET_SECRET"]
-            exchange = ccxt.binance({
+            exchange = exchange_cls({
                 "apiKey": api_key,
                 "secret": api_secret,
                 "enableRateLimit": True,
             })
-            exchange.set_sandbox_mode(True)
+            exchange.enable_demo_trading(True)
         self._exchange: ccxt.Exchange = exchange
         self._symbols = symbols
         self._max_sl_retries = max_sl_retries
@@ -156,8 +163,8 @@ class CcxtBinanceTestnetAdapter:
             try:
                 summary = await self.close_position(symbol)
                 closed.append(summary)
-            except ExchangeOrderClientError:
-                pass
+            except ExchangeOrderClientError as e:
+                log.warning("close_position_failed", symbol=symbol, error=str(e))
         return closed
 
     async def place_composite_order(
@@ -186,6 +193,9 @@ class CcxtBinanceTestnetAdapter:
 
         entry_result = _to_order_result(raw, order.side)
 
+        sl_order_id: str | None = None
+        tp_order_id: str | None = None
+
         # 2. Stop loss (STOP_LOSS_LIMIT) con retry exponencial
         if order.sl_price is not None and order.sl_price > 0:
             sl_side = "sell" if order.side is OrderSide.BUY else "buy"
@@ -193,7 +203,7 @@ class CcxtBinanceTestnetAdapter:
             sl_price_f = float(order.sl_price)
             for attempt in range(self._max_sl_retries):
                 try:
-                    await self._exchange.create_order(
+                    sl_raw = await self._exchange.create_order(
                         order.symbol,
                         type="STOP_LOSS_LIMIT",
                         side=sl_side,
@@ -201,6 +211,7 @@ class CcxtBinanceTestnetAdapter:
                         price=sl_price_f * 0.99,
                         params={"stopPrice": sl_price_f},
                     )
+                    sl_order_id = str(sl_raw.get("id", ""))
                     sl_error = None
                     break
                 except Exception as e:
@@ -225,7 +236,7 @@ class CcxtBinanceTestnetAdapter:
         if order.tp_price is not None and order.tp_price > 0:
             tp_side = "sell" if order.side is OrderSide.BUY else "buy"
             try:
-                await self._exchange.create_order(
+                tp_raw = await self._exchange.create_order(
                     order.symbol,
                     type="TAKE_PROFIT_LIMIT",
                     side=tp_side,
@@ -233,10 +244,56 @@ class CcxtBinanceTestnetAdapter:
                     price=float(order.tp_price),
                     params={"stopPrice": float(order.tp_price)},
                 )
-            except Exception:
-                pass
+                tp_order_id = str(tp_raw.get("id", ""))
+            except Exception as e:
+                log.warning("take_profit_placement_failed", symbol=order.symbol, error=str(e))
 
-        return entry_result
+        return OrderResult(
+            id=entry_result.id,
+            symbol=entry_result.symbol,
+            side=entry_result.side,
+            type=entry_result.type,
+            filled_amount=entry_result.filled_amount,
+            avg_price=entry_result.avg_price,
+            status=entry_result.status,
+            client_order_id=entry_result.client_order_id,
+            sl_order_id=sl_order_id,
+            tp_order_id=tp_order_id,
+        )
+
+    async def cancel_order(self, order_id: str, symbol: str) -> bool:
+        try:
+            await self._exchange.cancel_order(order_id, symbol)
+            return True
+        except Exception as e:
+            err_str = str(e).lower()
+            if "unknown order" in err_str or "does not exist" in err_str:
+                return False
+            raise ExchangeOrderClientError(
+                f"cancel_order_failed: {symbol} {order_id}: {e}"
+            ) from e
+
+    async def place_stop_loss_order(
+        self,
+        symbol: str,
+        side: OrderSide,
+        amount: Decimal,
+        stop_price: Decimal,
+    ) -> OrderResult:
+        try:
+            raw = await self._exchange.create_order(
+                symbol,
+                type="STOP_LOSS_LIMIT",
+                side=side.value.lower(),
+                amount=abs(float(amount)),
+                price=float(stop_price) * 0.99,
+                params={"stopPrice": float(stop_price)},
+            )
+        except Exception as e:
+            raise ExchangeOrderClientError(
+                f"stop_loss_placement_failed: {symbol}: {e}"
+            ) from e
+        return _to_order_result(raw, side)
 
     async def place_emergency_market(
         self, symbol: str, side: OrderSide, amount: Decimal
