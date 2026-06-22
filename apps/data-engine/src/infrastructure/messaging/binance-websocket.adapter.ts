@@ -9,6 +9,7 @@ import {
   BinanceTradeEvent,
   tickFromBinanceTrade,
 } from "./in-memory-tick-buffer"
+import { resolveWsBaseUrl } from "./exchange-ws-url.factory"
 
 export interface BinanceWebSocketAdapterOptions {
   url?: string
@@ -18,13 +19,12 @@ export interface BinanceWebSocketAdapterOptions {
   reconnectMaxMs?: number
   maxReconnectAttempts?: number | null
   logger?: (msg: string) => void
+  maxQueueSize?: number
 }
 
-const DEFAULT_URL =
-  "wss://stream.binance.com:9443/stream?streams=btcusdt@trade"
 const MAX_BACKOFF = 30_000
 const BASE_BACKOFF = 1_000
-const PONG_TIMEOUT_MS = 10_000
+const PONG_TIMEOUT_MS = 30_000
 
 export class BinanceWebSocketAdapter implements ExchangeGateway {
   private ws: WebSocket | null = null
@@ -39,17 +39,28 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
   private onTickHandler: ((tick: Tick) => Promise<void>) | null = null
   private lastTickTs: number | null = null
   private readonly log: (msg: string) => void
-  private readonly opts: Required<Omit<BinanceWebSocketAdapterOptions, "logger">>
+  private readonly opts: Required<Omit<BinanceWebSocketAdapterOptions, "logger" | "maxQueueSize">>
+
+  // Backpressure state
+  private pendingCount = 0
+  private wsPaused = false
+  private droppedTicks = 0
+  private readonly maxQueueSize: number
+
+  private static defaultUrl(): string {
+    return `${resolveWsBaseUrl()}/stream?streams=btcusdt@trade`
+  }
 
   constructor(opts: BinanceWebSocketAdapterOptions = {}) {
     this.opts = {
-      url: opts.url ?? DEFAULT_URL,
+      url: opts.url ?? BinanceWebSocketAdapter.defaultUrl(),
       pingIntervalMs: opts.pingIntervalMs ?? 30000,
       pongTimeoutMs: opts.pongTimeoutMs ?? PONG_TIMEOUT_MS,
       reconnectBaseMs: opts.reconnectBaseMs ?? BASE_BACKOFF,
       reconnectMaxMs: opts.reconnectMaxMs ?? MAX_BACKOFF,
       maxReconnectAttempts: opts.maxReconnectAttempts ?? null,
     }
+    this.maxQueueSize = opts.maxQueueSize ?? 1000
     this.log =
       opts.logger ??
       // eslint-disable-next-line no-console
@@ -66,6 +77,43 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       reconnectAttempt: this.reconnectAttempt,
       totalReconnects: this.totalReconnects,
       connectedAt: this.connectedAt,
+      pendingTicks: this.pendingCount,
+      droppedTicks: this.droppedTicks,
+    }
+  }
+
+  private async processTick(tick: Tick): Promise<void> {
+    if (this.pendingCount >= this.maxQueueSize) {
+      this.droppedTicks++
+      this.log(
+        `overflow: dropping tick ${tick.tradeId} ` +
+        `pending=${this.pendingCount} dropped=${this.droppedTicks}`,
+      )
+      return
+    }
+    this.pendingCount++
+    this.maybePause()
+    try {
+      await this.onTickHandler!(tick)
+    } finally {
+      this.pendingCount--
+      this.maybeResume()
+    }
+  }
+
+  private maybePause(): void {
+    if (this.pendingCount >= this.maxQueueSize && this.ws && !this.wsPaused) {
+      this.wsPaused = true
+      this.ws.pause()
+      this.log(`ws paused (pending=${this.pendingCount})`)
+    }
+  }
+
+  private maybeResume(): void {
+    if (this.wsPaused && this.pendingCount < this.maxQueueSize * 0.8 && this.ws) {
+      this.wsPaused = false
+      this.ws.resume()
+      this.log(`ws resumed (pending=${this.pendingCount})`)
     }
   }
 
@@ -77,11 +125,14 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
     this.intentionalClose = false
     this.reconnectAttempt = 0
     this.onTickHandler = onTick
+    this.pendingCount = 0
+    this.wsPaused = false
+    this.droppedTicks = 0
     this.connState = "connecting"
-    await this.open(onTick)
+    await this.open()
   }
 
-  private async open(onTick: (tick: Tick) => Promise<void>): Promise<void> {
+  private async open(): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.opts.url)
       this.ws = ws
@@ -125,7 +176,7 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
           if (!trade || trade.e !== "trade") return
           this.lastTickTs = Date.now()
           const tick = tickFromBinanceTrade(trade)
-          void onTick(tick)
+          void this.processTick(tick)
         } catch (e) {
           this.log(`parse error: ${(e as Error).message}`)
         }
@@ -177,7 +228,7 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       this.log(`reconnecting...`)
       this.connState = "connecting"
       if (this.onTickHandler) {
-        void this.open(this.onTickHandler).catch((err) => {
+        void this.open().catch((err) => {
           this.log(`reconnect failed: ${err.message}`)
           this.scheduleReconnect()
         })
