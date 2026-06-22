@@ -10,10 +10,15 @@ Usage:
     calibrator = SklearnProbabilityCalibrator(method="sigmoid")
     await calibrator.fit(val_probs, val_labels)
     calibrated = await calibrator.calibrate(raw_probs)
+
+Safe serialization (no pickle):
+    data = calibrator.to_safe_dict()
+    calibrator2 = SklearnProbabilityCalibrator(method=data["method"])
+    calibrator2.from_safe_dict(data)
 """
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import structlog
@@ -42,7 +47,8 @@ class SklearnProbabilityCalibrator:
     """Multi-class probability calibrator using sklearn.
 
     For multi-class, fits one calibrator per class in a
-    one-vs-rest fashion.
+    one-vs-rest fashion. Supports safe JSON serialization
+    via to_safe_dict() / from_safe_dict() — no pickle.
 
     Args:
         method: "sigmoid" for Platt Scaling, "isotonic" for Isotonic Regression.
@@ -149,3 +155,89 @@ class SklearnProbabilityCalibrator:
 
         except Exception as e:
             raise CalibrationError(f"calibrator_inference_failed: {e}") from e
+
+    def to_safe_dict(self) -> dict[str, Any]:
+        """Serialize calibrator state to a JSON-safe dict (no pickle).
+
+        Returns:
+            dict with method, fitted flag, calibrator params, and scaler stats.
+            All numpy arrays are converted to lists.
+        """
+        calibrators_list: list[dict[str, Any]] = []
+        if self._calibrators is not None:
+            for c in self._calibrators:
+                if isinstance(c, LogisticRegression):
+                    calibrators_list.append({
+                        "type": "LogisticRegression",
+                        "coef_": c.coef_.tolist(),
+                        "intercept_": c.intercept_.tolist(),
+                        "classes_": c.classes_.tolist() if hasattr(c, "classes_") else [],
+                    })
+                elif isinstance(c, IsotonicRegression):
+                    calibrators_list.append({
+                        "type": "IsotonicRegression",
+                        "X_thresholds_": c.X_thresholds_.tolist(),
+                        "y_thresholds_": c.y_thresholds_.tolist(),
+                    })
+
+        scaler_dict: dict[str, Any] = {}
+        if self._scaler is not None:
+            scaler_dict = {
+                "mean_": self._scaler.mean_.tolist(),
+                "var_": self._scaler.var_.tolist(),
+                "n_features_in_": int(self._scaler.n_features_in_),
+            }
+
+        return {
+            "version": 1,
+            "method": self._method,
+            "fitted": self._fitted,
+            "calibrators": calibrators_list,
+            "scaler": scaler_dict,
+        }
+
+    def from_safe_dict(self, data: dict[str, Any]) -> None:
+        """Restore calibrator state from a dict produced by to_safe_dict().
+
+        Args:
+            data: dict with calibrator state (version, method, fitted,
+                  calibrators, scaler).
+
+        Raises:
+            CalibrationError if the dict is malformed.
+        """
+        if data.get("version") != 1:
+            raise CalibrationError(f"unsupported calibrator version: {data.get('version')}")
+
+        self._method = data.get("method", "sigmoid")
+        self._fitted = data.get("fitted", False)
+
+        self._calibrators = []
+        for cal_data in data.get("calibrators", []):
+            cal_type = cal_data.get("type")
+            if cal_type == "LogisticRegression":
+                cal = LogisticRegression()
+                cal.coef_ = np.array(cal_data["coef_"])
+                cal.intercept_ = np.array(cal_data["intercept_"])
+                classes = cal_data.get("classes_", [])
+                cal.classes_ = np.array(classes) if classes else np.array([0, 1])
+                nf = cal.coef_.shape[1]
+                cal.n_features_in_ = nf
+                self._calibrators.append(cal)
+
+            elif cal_type == "IsotonicRegression":
+                cal = IsotonicRegression()
+                cal.X_thresholds_ = np.array(cal_data["X_thresholds_"])
+                cal.y_thresholds_ = np.array(cal_data["y_thresholds_"])
+                cal.f_ = None
+                cal.increasing_ = True
+                self._calibrators.append(cal)
+
+        scaler_data = data.get("scaler", {})
+        if scaler_data:
+            scaler = StandardScaler()
+            scaler.mean_ = np.array(scaler_data["mean_"])
+            scaler.var_ = np.array(scaler_data["var_"])
+            scaler.scale_ = np.sqrt(scaler.var_)
+            scaler.n_features_in_ = int(scaler_data.get("n_features_in_", len(scaler.mean_)))
+            self._scaler = scaler

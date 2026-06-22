@@ -16,6 +16,7 @@ import {
   EVENT_STORE,
 } from "./infrastructure/config/tokens"
 import { RedisProtocolBus } from "./infrastructure/messaging/redis-protocol-bus"
+import { MessageBus } from "./application/ports/message-bus.port"
 import {
   createExchangeAdapter,
   parseSymbols,
@@ -40,7 +41,7 @@ import { TechnicalIndicatorCalculator } from "./infrastructure/indicators/techni
 import { RedisFeaturePublisher } from "./infrastructure/messaging/redis-feature-publisher"
 import { EventStore } from "./application/ports/event-store.port"
 import { ExchangeGateway } from "./application/ports/exchange-gateway.port"
-import { FileEventStore } from "./infrastructure/storage/file-event-store"
+import { SqliteEventStore } from "./infrastructure/storage/sqlite-event-store"
 import { HistoricalPipelineService } from "./infrastructure/services/historical-pipeline.service"
 import { ReplayMarketUseCase } from "./application/use-cases/replay-market.usecase"
 
@@ -96,18 +97,19 @@ const exchangeProvider: Provider = {
 const healthMonitorProvider: Provider = {
   provide: HEALTH_MONITOR,
   inject: [BUS],
-  useFactory: (bus: RedisProtocolBus): BusHealthMonitor =>
+  useFactory: (bus: MessageBus): BusHealthMonitor =>
     new BusHealthMonitor(bus, { intervalMs: 1000 }),
 }
 
 const ingestProvider: Provider = {
   provide: IngestTickUseCase,
-  inject: [BUS, TICK_BUFFER, STREAM_NAME],
+  inject: [BUS, TICK_BUFFER, STREAM_NAME, EVENT_STORE],
   useFactory: (
-    bus: RedisProtocolBus,
+    bus: MessageBus,
     buffer: InMemoryTickBuffer,
     stream: StreamName,
-  ): IngestTickUseCase => new IngestTickUseCase(bus, buffer, stream),
+    store: SqliteEventStore,
+  ): IngestTickUseCase => new IngestTickUseCase(bus, buffer, stream, store),
 }
 
 const bufferUseCaseProvider: Provider = {
@@ -121,7 +123,7 @@ const flushProvider: Provider = {
   provide: FlushBufferUseCase,
   inject: [BUS, TICK_BUFFER],
   useFactory: (
-    bus: RedisProtocolBus,
+    bus: MessageBus,
     buffer: InMemoryTickBuffer,
   ): FlushBufferUseCase => {
     const prefix = process.env.STREAM_PREFIX ?? "ticks:"
@@ -196,9 +198,9 @@ const calculateFeaturesProvider: Provider = {
 
 const eventStoreProvider: Provider = {
   provide: EVENT_STORE,
-  useFactory: (): FileEventStore => {
-    const baseDir = process.env.ARGOS_HISTORICAL_DIR ?? "./data/historical"
-    return new FileEventStore({ baseDir })
+  useFactory: (): SqliteEventStore => {
+    const dbPath = process.env.ARGOS_EVENT_DB_PATH ?? "./data/events.db"
+    return new SqliteEventStore({ dbPath })
   },
 }
 
@@ -207,7 +209,7 @@ const replayProvider: Provider = {
   inject: [EVENT_STORE, BUS],
   useFactory: (
     store: EventStore,
-    bus: RedisProtocolBus,
+    bus: MessageBus,
   ): ReplayMarketUseCase => new ReplayMarketUseCase(store, bus),
 }
 

@@ -1,11 +1,15 @@
+"""ExecutionGate — Module 4: source-based execution gate.
+
+Intercepta TODAS las órdenes antes de ExecutionEngine:
+  - source != STREAMING → BLOCK
+  - source == STREAMING → ALLOW
+"""
 from __future__ import annotations
 
 from typing import Any, Callable
 
 import structlog
 
-from ...application.ports.execution_gate import ExecutionGate, GateVerdict
-from ...domain.recovery.reconciliation_engine import ReconciliationSummary
 from ...domain.value_objects.execution_signal import ExecutionSignal
 
 log = structlog.get_logger()
@@ -13,25 +17,25 @@ log = structlog.get_logger()
 _ALLOWED_SOURCES = frozenset({"STREAMING"})
 
 
-class SourceExecutionGate:
-    """ExecutionGate that blocks signals from non-streaming sources
-    and optionally checks reconciliation status.
+class ExecutionGate:
+    """Wraps an execute callable and enforces source-based access control.
 
-    Additional checks (idempotency, kill-switch) are added in
-    subsequent phases.
+    Usage in REST composition::
+
+        use_case = ExecuteSignalUseCase(...)
+        gated = ExecutionGate(use_case.execute)
+        result = await gated.execute(signal)
+        # signal.metadata["source"] must == "STREAMING"
+
+    Usage in streaming loop::
+
+        execute_fn = ExecutionGate(execute_uc.execute, source="STREAMING")
     """
 
-    def __init__(
-        self,
-        execute_fn: Callable[[ExecutionSignal], Any] | None = None,
-    ) -> None:
+    def __init__(self, execute_fn: Callable[[ExecutionSignal], Any]) -> None:
         self._execute = execute_fn
 
-    async def evaluate(
-        self,
-        signal: ExecutionSignal,
-        reconciliation: ReconciliationSummary | None = None,
-    ) -> GateVerdict:
+    async def execute(self, signal: ExecutionSignal) -> Any:
         source = signal.metadata.get("source", "UNKNOWN")
         if source not in _ALLOWED_SOURCES:
             log.warning(
@@ -40,33 +44,14 @@ class SourceExecutionGate:
                 signal_id=signal.signal_id,
                 side=signal.side.value,
             )
-            return GateVerdict(
-                approved=False,
-                reason=f"source={source} is not allowed for Phase B execution",
-            )
-
-        # Reconciliation check (I11, I19)
-        if reconciliation is not None and not reconciliation.is_consistent:
-            log.warning(
-                "[ecl:gate] reconciliation_mismatch",
-                signal_id=signal.signal_id,
-                symbol=signal.symbol,
-                matched=reconciliation.matched,
-                missing_exchange=reconciliation.missing_on_exchange,
-                missing_local=reconciliation.missing_local,
-                mismatches=reconciliation.partial_mismatch,
-            )
-            return GateVerdict(
-                approved=False,
-                reason=(
-                    f"reconciliation inconsistent: "
-                    f"matched={reconciliation.matched}, "
-                    f"missing_on_exchange={reconciliation.missing_on_exchange}, "
-                    f"missing_local={reconciliation.missing_local}, "
-                    f"partial_mismatch={reconciliation.partial_mismatch}"
-                ),
-                kill_switch_state="SOFT_HALT",
-            )
-
+            return _GateBlocked(source=source)
         log.info("[ecl:gate] allowed", source=source)
-        return GateVerdict(approved=True)
+        return await self._execute(signal)
+
+
+class _GateBlocked:
+    """Returned when ExecutionGate blocks a request."""
+
+    def __init__(self, source: str) -> None:
+        self.approved = False
+        self.reason = f"source={source} is not allowed for Phase B execution"

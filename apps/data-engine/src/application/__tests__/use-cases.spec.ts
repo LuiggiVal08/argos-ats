@@ -6,6 +6,8 @@ import { MessageBus } from "../ports/message-bus.port"
 import { ExchangeGateway, ExchangeConnectionState } from "../ports/exchange-gateway.port"
 import { TickBuffer } from "../ports/tick-buffer.port"
 import { HealthMonitor } from "../ports/health-monitor.port"
+import { EventStore } from "../ports/event-store.port"
+import { HistoricalEvent } from "../../domain/entities/historical-event"
 import { Tick } from "../../domain/entities/tick"
 import { Price } from "../../domain/value-objects/price"
 import { Symbol } from "../../domain/value-objects/symbol"
@@ -87,30 +89,59 @@ class FakeMonitor implements HealthMonitor {
   }
 }
 
+class FakeStore implements EventStore {
+  stored: HistoricalEvent[] = []
+  failStore = false
+  async store(event: HistoricalEvent): Promise<void> {
+    if (this.failStore) throw new Error("store-down")
+    this.stored.push(event)
+  }
+  async *read(_kind: HistoricalEvent["kind"], _from: number, _to: number): AsyncIterable<HistoricalEvent> {
+    for (const e of this.stored) yield e
+  }
+}
+
 describe("IngestTickUseCase", () => {
   it("publishes on success", async () => {
     const bus = new FakeBus()
     const buf = new FakeBuffer()
+    const store = new FakeStore()
     const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
-    const uc = new IngestTickUseCase(bus, buf, stream)
+    const uc = new IngestTickUseCase(bus, buf, stream, store)
     const r = await uc.execute(makeTick(1))
     expect(r.published).toBe(true)
     expect(r.buffered).toBe(false)
     expect(bus.published.length).toBe(1)
     expect(buf.size()).toBe(0)
+    expect(store.stored.length).toBe(1)
   })
 
   it("buffers on broker failure", async () => {
     const bus = new FakeBus()
     bus.failPublish = true
     const buf = new FakeBuffer()
+    const store = new FakeStore()
     const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
-    const uc = new IngestTickUseCase(bus, buf, stream)
+    const uc = new IngestTickUseCase(bus, buf, stream, store)
     const r = await uc.execute(makeTick(1))
     expect(r.published).toBe(false)
     expect(r.buffered).toBe(true)
     expect(bus.published.length).toBe(0)
     expect(buf.size()).toBe(1)
+    expect(store.stored.length).toBe(1) // stored despite broker failure
+  })
+
+  it("publishes even if store fails", async () => {
+    const bus = new FakeBus()
+    const buf = new FakeBuffer()
+    const store = new FakeStore()
+    store.failStore = true
+    const stream = StreamName.forTicks(Symbol.parse("BTC/USDT"), "ticks:")
+    const uc = new IngestTickUseCase(bus, buf, stream, store)
+    const r = await uc.execute(makeTick(1))
+    expect(r.published).toBe(true) // publish succeeds despite store failure
+    expect(r.buffered).toBe(false)
+    expect(store.stored.length).toBe(0)
   })
 })
 

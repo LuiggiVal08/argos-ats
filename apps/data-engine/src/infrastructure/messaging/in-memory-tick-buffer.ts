@@ -54,6 +54,27 @@ export class InMemoryTickBuffer implements TickBuffer {
 }
 
 /**
+ * Parse a decimal quantity string as BigInt with 8 decimal places.
+ *
+ * Avoids Number() loss of precision for very small or very large
+ * quantities (spec §5 Historia 1). Direct string-to-BigInt.
+ *
+ * Examples:
+ *   "0.00000001"   → 1n
+ *   "1.5"          → 150_000_000n
+ *   "0.000000001"  → 0n  (< 1 satoshi → 0, will be rejected by Tick.create)
+ */
+export function parseQuantity(q: string): bigint {
+  const dot = q.indexOf(".")
+  const intPart = dot === -1 ? q : q.slice(0, dot)
+  const decPart = dot === -1 ? "" : q.slice(dot + 1)
+  const padded = decPart.slice(0, 8).padEnd(8, "0")
+  const raw = intPart + padded
+  const clean = raw.replace(/^0+/, "") || "0"
+  return BigInt(clean)
+}
+
+/**
  * Helper to construct a Tick from a raw Binance trade event.
  * Keeps the WebSocket parsing logic out of the domain layer.
  */
@@ -66,7 +87,7 @@ export function tickFromBinanceTrade(evt: BinanceTradeEvent): Tick {
   return Tick.create({
     symbol,
     price: Price.parse(evt.p, 8),
-    quantity: BigInt(Math.trunc(Number(evt.q) * 1e8)),
+    quantity: parseQuantity(evt.q),
     side: evt.m ? "sell" : "buy",
     ts: evt.T,
     tradeId: String(evt.t),

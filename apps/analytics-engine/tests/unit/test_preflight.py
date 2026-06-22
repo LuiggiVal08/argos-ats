@@ -16,8 +16,11 @@ class TestPreflightCheck:
     def test_backtesting_no_errors(self) -> None:
         assert preflight_check("BACKTESTING") == []
 
-    def test_paper_trading_no_errors(self) -> None:
-        assert preflight_check("PAPER_TRADING") == []
+    def test_paper_trading_requires_testnet(self) -> None:
+        errors = preflight_check("PAPER_TRADING")
+        assert len(errors) == 2
+        assert "BINANCE_TESTNET_API_KEY" in str(errors)
+        assert "BINANCE_TESTNET_SECRET" in str(errors)
 
     def test_live_with_missing_vars(self) -> None:
         # Unset all required LIVE vars.

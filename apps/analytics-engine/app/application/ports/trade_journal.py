@@ -27,6 +27,7 @@ class TradeRecord:
     realized_pnl: Decimal       # positive = gain, negative = loss
     closed_at: datetime
     reference: str              # exchange order id or local tag
+    event_id: str = ""          # UUID v7 for event sourcing linkage (Fix 4)
 
 
 @runtime_checkable

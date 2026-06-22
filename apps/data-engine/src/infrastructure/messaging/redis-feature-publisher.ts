@@ -30,6 +30,7 @@ export class RedisFeaturePublisher implements FeaturePublisher {
     try {
       await this.client.quit()
     } catch {
+      console.warn("[feature-publisher] quit failed")
       this.client.disconnect()
     }
   }

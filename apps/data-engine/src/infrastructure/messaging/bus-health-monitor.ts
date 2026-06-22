@@ -40,6 +40,7 @@ export class BusHealthMonitor implements HealthMonitor {
       ok = await this.bus.ping()
     } catch {
       ok = false
+      console.warn("[bus-health] ping probe failed")
     }
     this.healthy = ok
   }

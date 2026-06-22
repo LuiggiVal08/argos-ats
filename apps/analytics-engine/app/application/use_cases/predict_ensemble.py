@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
+import structlog
 
 from ...domain.entities.ensemble_pipeline import EnsemblePipeline
 from ...domain.entities.market_context import MarketContext
@@ -34,6 +35,10 @@ from ...domain.value_objects.model_config import ModelConfig
 from ...domain.value_objects.market_regime import RegimeType
 from ...domain.value_objects.signal_side import SignalSide
 from ...domain.value_objects.trading_signal import TradingSignal
+from ..ports.additional_feature_provider import (
+    AdditionalFeatureError,
+    AdditionalFeatureProvider,
+)
 from ..ports.checkpoint_repository import CheckpointNotFoundError, CheckpointRepository
 from ..ports.confidence_filter import ConfidenceFilter, ConfidenceResult, FilterDecision
 from ..ports.data_preprocessor import DataPreprocessor, InsufficientDataError, PreprocessingError
@@ -43,6 +48,8 @@ from ..ports.ohlcv_source import OhlcvSource, OhlcvSourceError
 from ..ports.probability_calibrator import CalibrationError, ProbabilityCalibrator
 from ..ports.regime_detector import RegimeDetectionError, RegimeDetector
 from ..ports.uncertainty_estimator import UncertaintyEstimator, UncertaintyResult
+
+log = structlog.get_logger()
 
 
 class PredictEnsembleError(RuntimeError):
@@ -88,6 +95,7 @@ class PredictEnsembleSignalUseCase:
         uncertainty_estimator: UncertaintyEstimator | None = None,
         confidence_filter: ConfidenceFilter | None = None,
         regime_detector: RegimeDetector | None = None,
+        additional_feature_provider: AdditionalFeatureProvider | None = None,
     ) -> None:
         self._ohlcv = ohlcv_source
         self._preprocessor = preprocessor
@@ -99,6 +107,7 @@ class PredictEnsembleSignalUseCase:
         self._uncertainty = uncertainty_estimator
         self._confidence_filter = confidence_filter
         self._regime_detector = regime_detector
+        self._additional_features = additional_feature_provider
 
     async def execute(
         self,
@@ -124,6 +133,23 @@ class PredictEnsembleSignalUseCase:
 
         market_features = self._extract_market(features_raw, cfg.features)
         market_context = await self._detect_regime(market_features)
+
+        # Enrich with real-time features (funding, OI, order flow) if available
+        if self._additional_features is not None:
+            try:
+                extra = await self._additional_features.get_features(symbol)
+                if extra:
+                    market_features.update(extra)
+                    market_context = MarketContext(
+                        regime=market_context.regime,
+                        adx=market_context.adx,
+                        bbw=market_context.bbw,
+                        atr=market_context.atr,
+                        ema_slope=market_context.ema_slope,
+                        additional=extra,
+                    )
+            except AdditionalFeatureError as e:
+                log.warning("additional_features_failed", symbol=symbol, error=str(e))
 
         # Step 1: if MetaModel is available, use it for final decision
         side: SignalSide
@@ -173,7 +199,8 @@ class PredictEnsembleSignalUseCase:
             try:
                 uncertainty_result = await self._uncertainty.estimate(last_window, n_samples=30)
                 uncertainty = uncertainty_result.max_std
-            except Exception:
+            except Exception as e:
+                log.warning("uncertainty_estimation_failed", error=str(e))
                 uncertainty = None
 
         # Step 5: Confidence filter

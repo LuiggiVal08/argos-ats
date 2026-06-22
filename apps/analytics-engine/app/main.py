@@ -46,6 +46,7 @@ app.include_router(dataset_router)
 app.include_router(execution_router)
 app.include_router(notification_router)
 app.include_router(training_router)
+app.include_router(shadow_router)
 app.include_router(observability_router)
 app.include_router(shadow_router)
 
@@ -57,6 +58,8 @@ async def lifespan(_: FastAPI):
     comp: Composition = build_composition()
     app.state.composition = comp
     log.info("composition_built", mode=comp.mode, has_exchange=comp.exchange is not None)
+    if comp.mode == "LIVE_SIMULATION":
+        log.info("[BOOT] MODE = LIVE_SIMULATION (ENFORCED)")
 
     # FASE 5: Validate expected Redis streams exist at boot
     if comp.mode != "BACKTESTING":
@@ -89,11 +92,64 @@ async def lifespan(_: FastAPI):
         except Exception as e:
             log.warning("boot_stream_validation_error", error=str(e))
 
+    # FASE 4: Recovery startup — reconstruct state from persistence
+    recovery_blocked = False
+    from .composition import run_recovery
+    try:
+        recovery_report = await run_recovery(comp)
+        if recovery_report is not None:
+            log.info(
+                "recovery_result",
+                gate_state=recovery_report.gate.state.value,
+                snapshot_loaded=recovery_report.snapshot_loaded,
+                actions=recovery_report.actions_taken,
+            )
+            # Fix 1 (nuevo): Open stream barrier after successful recovery
+            if hasattr(comp, "stream_barrier") and comp.stream_barrier is not None:
+                recovery_ts = recovery_report.timestamp.timestamp()
+                comp.stream_barrier.open(recovery_timestamp=recovery_ts)
+                log.info("stream_barrier_opened", recovery_ts=recovery_ts)
+        else:
+            log.info("recovery_skipped", mode=comp.mode)
+    except Exception as e:
+        log.critical("recovery_fatal", error=str(e))
+        recovery_blocked = True
+
     streaming_tasks: list[asyncio.Task] = []
     redis_client: redis.Redis | None = None
     maintenance_tasks: list[asyncio.Task] = []
 
-    if comp.streaming is not None:
+    # ECL: Experiment Control Plane
+    ecl_snapshot: Any = None
+    ecl_sharpe_guard: Any = None
+    ecl_baseline_checker: Any = None
+    ecl_health_aggregator: Any = None
+
+    # EDL: Trade Episode Store (evidence layer)
+    episode_store: Any = None
+
+    if recovery_blocked:
+        log.critical("recovery_blocked_streaming_disabled")
+        comp.recovery_blocked = True
+    elif comp.streaming is not None:
+
+        # FASE 7: LIVE_SIMULATION validation check
+        if comp.mode == "LIVE_SIMULATION":
+            _validation_ok = True
+            _checks: list[str] = []
+            if comp.mode != "LIVE_SIMULATION":
+                _validation_ok = False
+                _checks.append("mode_mismatch")
+            if hasattr(comp, "recovery_blocked") and comp.recovery_blocked:
+                _validation_ok = False
+                _checks.append("recovery_blocked")
+            if _validation_ok:
+                log.info("[BOOT] LIVE_SIMULATION VALIDATION PASSED")
+            else:
+                log.warning(
+                    "[BOOT] LIVE_SIMULATION VALIDATION FAILED",
+                    failed_checks=_checks,
+                )
 
         symbol = os.environ.get("SYMBOL", "BTC/USDT")
         url = os.environ.get("ARGOS_BROKER_URL", "redis://localhost:6379")
@@ -134,6 +190,15 @@ async def lifespan(_: FastAPI):
             from .infrastructure.monitoring.phase_b_tracker import (
                 PhaseBTracker,
             )
+            from .infrastructure.monitoring.experiment_control_plane import (
+                BaselineDominanceChecker,
+                ExperimentSnapshot,
+                HealthCheckAggregator,
+                RollingSharpeGuard,
+            )
+            from .infrastructure.edl.trade_episode import (
+                TradeEpisodeStore,
+            )
 
             execute_uc = _build_execute_uc(comp)
             monitor_uc = _build_monitor_uc(comp)
@@ -147,11 +212,31 @@ async def lifespan(_: FastAPI):
                 initial_capital=initial_capital,
             )
 
+            # ECL: initialize experiment components
+            ecl_snapshot = ExperimentSnapshot(
+                symbol=symbol,
+                timeframe="1h",
+                execution_mode=comp.mode,
+                initial_capital=initial_capital,
+                model_version="",
+                git_commit=os.environ.get("GIT_HASH", ""),
+            )
+            ecl_snapshot.emit()
+            ecl_sharpe_guard = RollingSharpeGuard()
+            ecl_baseline_checker = BaselineDominanceChecker()
+            ecl_health_aggregator = HealthCheckAggregator(
+                sharpe_guard=ecl_sharpe_guard,
+                baseline_checker=ecl_baseline_checker,
+                initial_capital=initial_capital,
+            )
+
+            episode_store = TradeEpisodeStore()
+
             t1 = asyncio.create_task(
                 _tick_to_candle_loop(comp, redis_client, stream_monitor, candle_persister)
             )
             t2 = asyncio.create_task(
-                _decision_loop(comp, guard, health_collector, phase_b_tracker, redis_client, symbol)
+                _decision_loop(comp, guard, health_collector, phase_b_tracker, redis_client, symbol, episode_store)
             )
             t3 = asyncio.create_task(
                 _position_monitor_loop(comp, monitor_uc)
@@ -163,7 +248,10 @@ async def lifespan(_: FastAPI):
                 _stream_idle_check_loop(stream_monitor)
             )
             t7 = asyncio.create_task(
-                _phase_b_loop(phase_b_tracker)
+                _phase_b_loop(phase_b_tracker, ecl_health_aggregator, episode_store)
+            )
+            t8 = asyncio.create_task(
+                _shadow_outcome_loop(redis_client, comp, symbol)
             )
             t9 = asyncio.create_task(
                 _shadow_outcome_loop(redis_client, comp, symbol)
@@ -367,6 +455,7 @@ async def _decision_loop(
     phase_b_tracker: object,
     redis_client: Any,
     symbol: str,
+    episode_store: object | None = None,
 ) -> None:
     """Loop 2: every ~1s, check for new 1h candle, run inference.
 
@@ -377,6 +466,11 @@ async def _decision_loop(
     from .infrastructure.trading.execution_guard import ExecutionGuard
     from .infrastructure.monitoring.system_health import (
         SystemHealthCollector,
+    )
+    from .infrastructure.edl.trade_episode import (
+        FeatureCanonicalizer,
+        TradeEpisode,
+        TradeEpisodeStore,
     )
 
     streaming = comp.streaming
@@ -434,6 +528,25 @@ async def _decision_loop(
 
                 has_signal = result.signal is not None
                 health.record_inference(latency_ms, has_signal)
+
+                if has_signal and redis_client is not None:
+                    last = candles[-1] if candles else {}
+                    from .infrastructure.shadow.shadow_producer import (
+                        produce_shadow_decision,
+                    )
+                    asyncio.create_task(
+                        produce_shadow_decision(
+                            redis_client,
+                            symbol,
+                            result.signal.side.value,
+                            result.ensemble_confidence,
+                            result.candle_close,
+                            last,
+                            int(candles[-1].get("timestamp", 0)),
+                            result.model_version,
+                            result.regime,
+                        )
+                    )
 
                 if not has_signal:
                     log.info(
@@ -512,6 +625,23 @@ async def _decision_loop(
                     position_id = None
                     entry_price = None
 
+                episode_id = ""
+                feature_hash = ""
+                if exec_approved and position_id is not None and episode_store is not None:
+                    store: TradeEpisodeStore = episode_store
+                    feat = pipeline.last_raw_features
+                    if feat is not None:
+                        feature_hash = FeatureCanonicalizer.canonicalize(feat)
+                    episode = TradeEpisode(
+                        side=proc_result.execution_signal.side.value,
+                        model_version=result.model_version,
+                        regime_at_entry=result.regime,
+                        feature_hash=feature_hash,
+                    )
+                    store.append(episode)
+                    episode_id = episode.episode_id
+                    log.info("[edl] episode_created", episode_id=episode_id, position_id=position_id)
+
                 phase_b_tracker.record_execution(
                     signal_id=proc_result.execution_signal.signal_id,
                     position_id=position_id,
@@ -538,6 +668,22 @@ async def _decision_loop(
         raise
 
 
+async def _shadow_outcome_loop(
+    redis_client: Any,
+    comp: Composition,
+    symbol: str,
+) -> None:
+    """Loop 4: periodically evaluate shadow decisions against market outcome."""
+    from .infrastructure.shadow.shadow_outcome_worker import (
+        shadow_outcome_worker_loop,
+    )
+
+    assert comp.streaming is not None
+    await shadow_outcome_worker_loop(
+        client=redis_client,
+        candle_buffer=comp.streaming.candle_buffer,
+        symbol=symbol,
+    )
 
 
 async def _shadow_outcome_loop(
@@ -697,24 +843,70 @@ async def _stream_idle_check_loop(stream_monitor: object) -> None:
 
 async def _phase_b_loop(
     phase_b_tracker: object,
+    ecl_health: object | None = None,
+    episode_store: object | None = None,
 ) -> None:
     """Loop 7: Phase B metric collection every 60 seconds.
 
     Drives the PhaseBTracker: polls closed positions, updates market
     baselines, checks kill-switch thresholds, emits periodic metrics
     and daily reports.
+
+    When ``ecl_health`` is provided, emits ``phase_b_experiment_health``
+    after each tick.
+    When ``episode_store`` is provided, settles TradeEpisodes for
+    newly closed positions.
     """
+    from .infrastructure.monitoring.experiment_control_plane import (
+        HealthCheckAggregator,
+    )
     from .infrastructure.monitoring.phase_b_tracker import (
         PhaseBTracker,
         PhaseBTradeEntry,
     )
+    from .infrastructure.edl.trade_episode import (
+        TradeEpisodeStore,
+    )
 
     tracker: PhaseBTracker = phase_b_tracker
+    aggregator: HealthCheckAggregator | None = ecl_health
+    store: TradeEpisodeStore | None = episode_store
+
+    # Track which episodes we already settled
+    _settled_up_to: int = 0
 
     try:
         while True:
             await asyncio.sleep(60.0)
             await tracker.tick()
+            if aggregator is not None:
+                aggregator.emit(
+                    system_pnl=tracker.total_pnl,
+                    bnh_pnl=tracker.bnh_pnl,
+                    ema_pnl=tracker.ema_cross_pnl,
+                    daily_returns=tracker.daily_returns,
+                    drawdown_pct=tracker.max_drawdown_pct,
+                )
+
+            # EDL: settle newly closed trades
+            if store is not None:
+                closed = tracker.all_closed_since(_settled_up_to)
+                for entry in closed:
+                    if not entry.episode_id:
+                        continue
+                    ep = store.get(entry.episode_id)
+                    if ep is not None and ep.t_exit is None:
+                        settled = ep.settle(
+                            t_exit=entry.closed_at,
+                            pnl=entry.realized_pnl,
+                        )
+                        store.append_settled(settled)
+                        log.info(
+                            "[edl] episode_settled",
+                            episode_id=entry.episode_id,
+                            pnl=str(entry.realized_pnl),
+                        )
+                _settled_up_to = tracker.trade_count
     except asyncio.CancelledError:
         pass
 

@@ -49,6 +49,7 @@ export class NotificationConsumer implements OnModuleInit, OnModuleDestroy {
       try {
         this.sub.quit()
       } catch {
+        console.warn("[notif] consumer quit failed")
         this.sub.disconnect()
       }
     }

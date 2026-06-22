@@ -35,7 +35,7 @@ class TaAtrCalculator(AtrCalculator):
         self._source = source
 
     async def get_atr(
-        self, symbol: str, timeframe: str = "1m", window: int = 14
+        self, symbol: str, timeframe: str = "1h", window: int = 14
     ) -> Atr:
         try:
             df = await self._source(symbol, timeframe, window)

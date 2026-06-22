@@ -17,12 +17,13 @@ Mapeo binario -> 3 clases (TradingSignal):
 from __future__ import annotations
 
 import io
-import pickle
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import structlog
 
 from ...application.ports.model_predictor import (
     ModelPredictor,
@@ -39,6 +40,8 @@ try:
     _TORCH_AVAILABLE = True
 except ImportError:
     _TORCH_AVAILABLE = False
+
+log = structlog.get_logger()
 
 
 class _ArgosLSTM(nn.Module):
@@ -188,12 +191,7 @@ class NovaQuantPyTorchModel(ModelPredictor):
         self._model = model
 
         if scaler_path:
-            with open(scaler_path, "rb") as f:
-                scaler = pickle.load(f)
-            self._feature_means = np.array(scaler.mean_, dtype=np.float64)
-            self._feature_stds = np.array(
-                np.sqrt(scaler.var_), dtype=np.float64
-            )
+            self._load_scaler_from_json(scaler_path)
 
     def load_weights_from_bytes(
         self,
@@ -231,11 +229,7 @@ class NovaQuantPyTorchModel(ModelPredictor):
         self._model = model
 
         if scaler_bytes:
-            scaler = pickle.loads(scaler_bytes)
-            self._feature_means = np.array(scaler.mean_, dtype=np.float64)
-            self._feature_stds = np.array(
-                np.sqrt(scaler.var_), dtype=np.float64
-            )
+            self._load_scaler_from_json_bytes(scaler_bytes)
 
     def is_loaded(self) -> bool:
         return self._model is not None
@@ -249,11 +243,34 @@ class NovaQuantPyTorchModel(ModelPredictor):
         return buf.getvalue()
 
     def get_scaler_bytes(self) -> bytes:
-        """Serializa scaler a bytes."""
+        """Serializa scaler a JSON bytes (no pickle)."""
         if self._feature_means is None:
             return b""
-        scaler = _ScalerStub(self._feature_means, self._feature_stds)
-        return pickle.dumps(scaler)
+        data = {
+            "version": 1,
+            "mean_": self._feature_means.tolist(),
+            "var_": (self._feature_stds ** 2).tolist(),
+        }
+        return json.dumps(data).encode("utf-8")
+
+    # ── Scaler JSON loading (replaces pickle) ─────────────────────
+
+    def _load_scaler_from_json(self, path: str | Path) -> None:
+        """Load scaler mean/std from JSON file. Rejects legacy pickle."""
+        raw = Path(path).read_bytes()
+        self._load_scaler_from_json_bytes(raw)
+
+    def _load_scaler_from_json_bytes(self, raw: bytes) -> None:
+        """Load scaler mean/std from JSON bytes. Rejects legacy pickle."""
+        if len(raw) > 0 and raw[0] == 0x80:
+            log.error("scaler_load_rejected", reason="legacy_pickle_checkpoint_rejected_for_security")
+            return
+        try:
+            data = json.loads(raw.decode("utf-8"))
+            self._feature_means = np.array(data["mean_"], dtype=np.float64)
+            self._feature_stds = np.sqrt(np.array(data["var_"], dtype=np.float64))
+        except Exception as e:
+            log.warning("scaler_load_failed", error=str(e))
 
     # ── Privado ───────────────────────────────────────────────────
 
@@ -285,11 +302,3 @@ def _infer_architecture(
         num_layers += 1
 
     return n_features, hidden_dim, num_layers
-
-
-class _ScalerStub:
-    """Stub de StandardScaler para serializacion."""
-
-    def __init__(self, mean_: np.ndarray, var_: np.ndarray) -> None:
-        self.mean_ = mean_
-        self.var_ = var_

@@ -1,7 +1,10 @@
+import { Logger } from "@nestjs/common"
 import Redis, { RedisOptions } from "ioredis"
 import { Tick } from "../../domain/entities/tick"
 import { StreamName } from "../../domain/value-objects/stream-name"
 import { MessageBus } from "../../application/ports/message-bus.port"
+
+const warn = (m: string): void => Logger.warn(m, "RedisProtocolBus")
 
 export interface RedisProtocolBusOptions {
   /** Full URL, e.g. `redis://localhost:6379`. Required. */
@@ -43,6 +46,7 @@ export class RedisProtocolBus implements MessageBus {
   private readonly opts: Required<Omit<RedisProtocolBusOptions, "redisOptions">> & {
     redisOptions?: Partial<RedisOptions>
   }
+  private handlerErrorCount = 0
 
   constructor(opts: RedisProtocolBusOptions) {
     if (!opts.url) {
@@ -68,8 +72,13 @@ export class RedisProtocolBus implements MessageBus {
     // Stream entries are tuples of (field, value); we use a single
     // field "p" for compactness. The full Tick is recoverable via
     // Tick.fromJSON on the consumer side.
+    // MAXLEN ~2000 keeps memory bounded — trades accuracy of stream
+    // truncation for predictable O(1) memory per symbol.
     await this.client.xadd(
       stream.toString(),
+      "MAXLEN",
+      "~",
+      2000,
       "*",
       "p",
       JSON.stringify(tick.toJSON()),
@@ -122,9 +131,11 @@ export class RedisProtocolBus implements MessageBus {
               try {
                 const tick = Tick.fromJSON(JSON.parse(raw))
                 await handler(tick)
-              } catch {
-                // Swallow handler errors to keep the loop alive. The
-                // application layer decides whether to log or escalate.
+              } catch (e) {
+                this.handlerErrorCount++
+                if (this.handlerErrorCount % 100 === 0) {
+                  warn(`handler errors: ${this.handlerErrorCount} — ${(e as Error).message}`)
+                }
               }
             }
           }
@@ -141,7 +152,8 @@ export class RedisProtocolBus implements MessageBus {
       stopped = true
       try {
         await sub.quit()
-      } catch {
+      } catch (e) {
+        warn(`sub quit failed: ${(e as Error).message}`)
         sub.disconnect()
       }
     }
@@ -151,7 +163,8 @@ export class RedisProtocolBus implements MessageBus {
     try {
       const r = await this.client.ping()
       return r === "PONG"
-    } catch {
+    } catch (e) {
+      warn(`ping failed: ${(e as Error).message}`)
       return false
     }
   }
@@ -159,7 +172,8 @@ export class RedisProtocolBus implements MessageBus {
   async close(): Promise<void> {
     try {
       await this.client.quit()
-    } catch {
+    } catch (e) {
+      warn(`close quit failed: ${(e as Error).message}`)
       this.client.disconnect()
     }
   }

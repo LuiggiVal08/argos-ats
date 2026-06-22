@@ -82,7 +82,7 @@ export class HistoricalPipelineService implements OnModuleInit, OnModuleDestroy 
       this.timer = null
     }
     if (this.client) {
-      try { await this.client.quit() } catch { this.client.disconnect() }
+      try { await this.client.quit() } catch { log("[historical-pipeline] redis quit failed"); this.client.disconnect() }
       this.client = null
     }
     log("shutdown")
@@ -126,7 +126,7 @@ export class HistoricalPipelineService implements OnModuleInit, OnModuleDestroy 
               }
             }
           }
-        } catch { /* stream may not exist yet — skip */ }
+        } catch { log("[historical-pipeline] stream not ready yet (expected during startup)") }
       }
     }, 2_000)
   }

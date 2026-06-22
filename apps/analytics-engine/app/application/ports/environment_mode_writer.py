@@ -23,12 +23,14 @@ from typing import Protocol, runtime_checkable
 
 
 class EnvironmentMode(str, Enum):
-    """The four runtime modes. Per AGENTS.md invariant #5, only
-    these four are valid — PASIVO is the "halted" state set by
-    the circuit breaker."""
+    """The five runtime modes. Per AGENTS.md invariant #5, only
+    these five are valid — PASIVO is the "halted" state set by
+    the circuit breaker. LIVE_SIMULATION is PAPER_TRADING with
+    real exchange data and notifications enabled."""
 
     BACKTESTING = "BACKTESTING"
     PAPER_TRADING = "PAPER_TRADING"
+    LIVE_SIMULATION = "LIVE_SIMULATION"
     LIVE = "LIVE"
     PASIVO = "PASIVO"
 

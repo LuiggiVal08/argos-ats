@@ -1,6 +1,9 @@
+import { Logger } from "@nestjs/common"
 import { Candle } from "../../domain/entities/candle"
 import { FeatureVector } from "../../domain/entities/feature-vector"
 import { FeatureCalculator } from "../../application/ports/feature-calculator.port"
+
+const log = (m: string): void => Logger.log(m, "TechnicalIndicatorCalculator")
 
 export class TechnicalIndicatorCalculator implements FeatureCalculator {
   execute(candles: Candle[]): FeatureVector {
@@ -14,24 +17,24 @@ export class TechnicalIndicatorCalculator implements FeatureCalculator {
 
     try {
       vector = vector.add("pct_change", this.pctChange(closes))
-    } catch { /* skip — will be missing from vector */ }
+    } catch (e) { log(`pct_change failed: ${(e as Error).message}`) }
 
     try {
       vector = vector.add("vol_sma_20", this.sma(volumes, 20))
-    } catch { /* skip */ }
+    } catch (e) { log(`vol_sma_20 failed: ${(e as Error).message}`) }
 
     try {
       vector = vector.add("obv", this.obv(closes, volumes))
-    } catch { /* skip */ }
+    } catch (e) { log(`obv failed: ${(e as Error).message}`) }
 
     if (closes.length >= 9) {
-      try { vector = vector.add("ema_9", this.ema(closes, 9)) } catch { /* skip */ }
+      try { vector = vector.add("ema_9", this.ema(closes, 9)) } catch (e) { log(`ema_9 failed: ${(e as Error).message}`) }
     }
     if (closes.length >= 21) {
-      try { vector = vector.add("ema_21", this.ema(closes, 21)) } catch { /* skip */ }
+      try { vector = vector.add("ema_21", this.ema(closes, 21)) } catch (e) { log(`ema_21 failed: ${(e as Error).message}`) }
     }
     if (closes.length >= 50) {
-      try { vector = vector.add("ema_50", this.ema(closes, 50)) } catch { /* skip */ }
+      try { vector = vector.add("ema_50", this.ema(closes, 50)) } catch (e) { log(`ema_50 failed: ${(e as Error).message}`) }
     }
 
     if (closes.length >= 26) {
@@ -40,20 +43,20 @@ export class TechnicalIndicatorCalculator implements FeatureCalculator {
         vector = vector.add("macd", m.macd)
         vector = vector.add("macd_signal", m.signal)
         vector = vector.add("macd_histogram", m.histogram)
-      } catch { /* skip */ }
+      } catch (e) { log(`macd failed: ${(e as Error).message}`) }
     }
 
     if (closes.length >= 14) {
-      try { vector = vector.add("rsi_14", this.rsi(closes, 14)) } catch { /* skip */ }
+      try { vector = vector.add("rsi_14", this.rsi(closes, 14)) } catch (e) { log(`rsi_14 failed: ${(e as Error).message}`) }
     }
     if (highs.length >= 14) {
-      try { vector = vector.add("atr_14", this.atr(highs, lows, closes, 14)) } catch { /* skip */ }
+      try { vector = vector.add("atr_14", this.atr(highs, lows, closes, 14)) } catch (e) { log(`atr_14 failed: ${(e as Error).message}`) }
     }
     if (highs.length >= 28) {
-      try { vector = vector.add("adx_14", this.adx(highs, lows, closes, 14)) } catch { /* skip */ }
+      try { vector = vector.add("adx_14", this.adx(highs, lows, closes, 14)) } catch (e) { log(`adx_14 failed: ${(e as Error).message}`) }
     }
     if (closes.length >= 20) {
-      try { vector = vector.add("bbw_20", this.bbw(closes, 20)) } catch { /* skip */ }
+      try { vector = vector.add("bbw_20", this.bbw(closes, 20)) } catch (e) { log(`bbw_20 failed: ${(e as Error).message}`) }
     }
 
     return vector
