@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+import structlog
 
 from ..application.use_cases.collect_telemetry import (
     CollectTelemetryUseCase,
@@ -28,6 +29,9 @@ from ..composition import (
     get_dashboard_history_usecase,
     get_update_dashboard_usecase,
 )
+
+log = structlog.get_logger()
+_error_counters: dict[str, int] = {}
 
 router = APIRouter(prefix="/observability", tags=["observability"])
 
@@ -133,3 +137,75 @@ async def recover_from_incident(request: Request, event_type: str) -> dict:
     uc: RecoverFromIncidentUseCase = get_recover_from_incident_usecase(request)
     result = await uc.execute(event_type)
     return result
+
+
+@router.get("/trading", summary="Get current trading status")
+async def trading_status(request: Request) -> dict:
+    comp = request.app.state.composition
+
+    positions = []
+    if comp.position_repo is not None:
+        try:
+            positions = await comp.position_repo.list_all()
+        except Exception:
+            _error_counters["list_positions"] = _error_counters.get("list_positions", 0) + 1
+            if _error_counters["list_positions"] % 50 == 0:
+                log.warning("observability_fallback", component="position_repo", count=_error_counters["list_positions"])
+            positions = []
+
+    drawdown_status: dict = {"equity": None, "drawdown_pct": None, "halted": None}
+    if comp.check_drawdown is not None:
+        try:
+            snap = await comp.check_drawdown.load_current_snapshot()
+            halted = await comp.check_drawdown.is_halted()
+            if snap is not None:
+                drawdown_status = {
+                    "equity": float(snap.current_balance),
+                    "drawdown_pct": float(snap.drawdown_pct),
+                    "halted": halted,
+                }
+            else:
+                drawdown_status = {"equity": None, "drawdown_pct": None, "halted": halted}
+        except Exception:
+            _error_counters["drawdown"] = _error_counters.get("drawdown", 0) + 1
+            if _error_counters["drawdown"] % 50 == 0:
+                log.warning("observability_fallback", component="drawdown", count=_error_counters["drawdown"])
+            drawdown_status = {"equity": None, "drawdown_pct": None, "halted": None}
+
+    candles = []
+    if comp.streaming is not None and comp.streaming.candle_buffer is not None:
+        try:
+            candles = comp.streaming.candle_buffer.to_ohlcv_dicts()
+        except Exception:
+            _error_counters["candles"] = _error_counters.get("candles", 0) + 1
+            if _error_counters["candles"] % 50 == 0:
+                log.warning("observability_fallback", component="candles", count=_error_counters["candles"])
+            candles = []
+
+    pipeline_info: dict = {"is_loaded": False}
+    if comp.streaming is not None and comp.streaming.inference_pipeline is not None:
+        try:
+            pipeline_info = {
+                "is_loaded": comp.streaming.inference_pipeline.is_loaded,
+            }
+        except Exception:
+            _error_counters["pipeline"] = _error_counters.get("pipeline", 0) + 1
+            if _error_counters["pipeline"] % 50 == 0:
+                log.warning("observability_fallback", component="pipeline", count=_error_counters["pipeline"])
+            pipeline_info = {"is_loaded": False}
+
+    return {
+        "mode": comp.mode,
+        "drawdown": drawdown_status,
+        "positions": {
+            "count": len(positions),
+            "open": positions[:5],
+        },
+        "pipeline": pipeline_info,
+        "candles_1m": len(candles),
+        "recovery": {
+            "blocked": getattr(comp, "recovery_blocked", False),
+            "gate_state": comp.recovery_report.gate.state.value if comp.recovery_report and hasattr(comp.recovery_report, "gate") else None,
+        },
+        "exchange": comp.exchange is not None,
+    }
