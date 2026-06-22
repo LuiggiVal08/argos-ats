@@ -1,0 +1,35 @@
+{
+  "tick_samples": [
+    {
+      "id": "1781894970820-0",
+      "fields": {
+        "p": "{\"symbol\":\"BTC/USDT\",\"price\":{\"minor\":\"6305490000000\",\"decimals\":8},\"quantity\":\"16000\",\"side\":\"buy\","
+      }
+    },
+    {
+      "id": "1781894970819-0",
+      "fields": {
+        "p": "{\"symbol\":\"BTC/USDT\",\"price\":{\"minor\":\"6305490000000\",\"decimals\":8},\"quantity\":\"16000\",\"side\":\"buy\","
+      }
+    },
+    {
+      "id": "1781894970818-0",
+      "fields": {
+        "p": "{\"symbol\":\"BTC/USDT\",\"price\":{\"minor\":\"6305490000000\",\"decimals\":8},\"quantity\":\"16000\",\"side\":\"buy\","
+      }
+    },
+    {
+      "id": "1781894970668-0",
+      "fields": {
+        "p": "{\"symbol\":\"BTC/USDT\",\"price\":{\"minor\":\"6305489000000\",\"decimals\":8},\"quantity\":\"167000\",\"side\":\"sell"
+      }
+    },
+    {
+      "id": "1781894970666-0",
+      "fields": {
+        "p": "{\"symbol\":\"BTC/USDT\",\"price\":{\"minor\":\"6305489000000\",\"decimals\":8},\"quantity\":\"167000\",\"side\":\"sell"
+      }
+    }
+  ],
+  "stream_length": 4396686
+}

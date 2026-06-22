@@ -1,0 +1,178 @@
+{
+  "phase": "quant_validation_v2_phase7",
+  "thresholds": {
+    "buy": 0.6,
+    "sell": 0.4
+  },
+  "cost_round_trip": 0.0031,
+  "per_symbol": {
+    "BTC": {
+      "symbol": "BTC",
+      "thresholds": {
+        "buy": 0.6,
+        "sell": 0.4
+      },
+      "cost_round_trip": 0.0031,
+      "n_total_predictions": 3677,
+      "n_buy": 1582,
+      "n_sell": 1370,
+      "n_hodl": 725,
+      "trade_rate_pct": 80.28,
+      "with_costs": {
+        "name": "BTC",
+        "n_trades": 2952,
+        "n_days": 1476,
+        "n_hodl": 0,
+        "total_return": 4919714.438004,
+        "cagr": 44.169955,
+        "sharpe": 9.42,
+        "sortino": 20.5478,
+        "calmar": 142.0103,
+        "max_dd": -0.311033,
+        "win_rate": 0.753,
+        "profit_factor": 2.8495,
+        "mean_daily_return": 0.01074043,
+        "std_daily_return": 0.02178289
+      },
+      "without_costs": {
+        "name": "BTC_no_cost",
+        "n_trades": 2952,
+        "n_days": 1476,
+        "n_hodl": 0,
+        "total_return": 39366246819.49864,
+        "cagr": 415.934593,
+        "sharpe": 14.0215,
+        "sortino": 36.1803,
+        "calmar": 6250.6763,
+        "max_dd": -0.066542,
+        "win_rate": 0.7778,
+        "profit_factor": 4.8513,
+        "mean_daily_return": 0.01694043,
+        "std_daily_return": 0.02308214
+      }
+    },
+    "ETH": {
+      "symbol": "ETH",
+      "thresholds": {
+        "buy": 0.6,
+        "sell": 0.4
+      },
+      "cost_round_trip": 0.0031,
+      "n_total_predictions": 3767,
+      "n_buy": 1765,
+      "n_sell": 1260,
+      "n_hodl": 742,
+      "trade_rate_pct": 80.3,
+      "with_costs": {
+        "name": "ETH",
+        "n_trades": 3025,
+        "n_days": 1482,
+        "n_hodl": 0,
+        "total_return": 55009699956.56133,
+        "cagr": 440.824596,
+        "sharpe": 10.7957,
+        "sortino": 22.7011,
+        "calmar": 1208.8938,
+        "max_dd": -0.364651,
+        "win_rate": 0.7683,
+        "profit_factor": 3.2529,
+        "mean_daily_return": 0.01730465,
+        "std_daily_return": 0.03062386
+      },
+      "without_costs": {
+        "name": "ETH_no_cost",
+        "n_trades": 3025,
+        "n_days": 1482,
+        "n_hodl": 0,
+        "total_return": 510214242023126.8,
+        "cagr": 4190.357613,
+        "sharpe": 14.0959,
+        "sortino": 33.2025,
+        "calmar": 36345.3431,
+        "max_dd": -0.115293,
+        "win_rate": 0.7769,
+        "profit_factor": 4.777,
+        "mean_daily_return": 0.02363225,
+        "std_daily_return": 0.03203022
+      }
+    },
+    "SOL": {
+      "symbol": "SOL",
+      "thresholds": {
+        "buy": 0.6,
+        "sell": 0.4
+      },
+      "cost_round_trip": 0.0031,
+      "n_total_predictions": 4057,
+      "n_buy": 1711,
+      "n_sell": 1515,
+      "n_hodl": 831,
+      "trade_rate_pct": 79.52,
+      "with_costs": {
+        "name": "SOL",
+        "n_trades": 3226,
+        "n_days": 1486,
+        "n_hodl": 0,
+        "total_return": 1.867624735949583e+16,
+        "cagr": 9922.141846,
+        "sharpe": 12.3291,
+        "sortino": 29.9863,
+        "calmar": 30326.2838,
+        "max_dd": -0.32718,
+        "win_rate": 0.7777,
+        "profit_factor": 3.4816,
+        "mean_daily_return": 0.02631098,
+        "std_daily_return": 0.04077117
+      },
+      "without_costs": {
+        "name": "SOL_no_cost",
+        "n_trades": 3226,
+        "n_days": 1486,
+        "n_hodl": 0,
+        "total_return": 2.8956583573512084e+20,
+        "cagr": 106152.397291,
+        "sharpe": 14.9747,
+        "sortino": 40.5744,
+        "calmar": 675944.5654,
+        "max_dd": -0.157043,
+        "win_rate": 0.7781,
+        "profit_factor": 4.6274,
+        "mean_daily_return": 0.03304086,
+        "std_daily_return": 0.04215396
+      }
+    }
+  },
+  "portfolio_with_costs": {
+    "name": "equal_weight_portfolio",
+    "n_trades": 4851,
+    "n_days": 1486,
+    "n_hodl": 0,
+    "total_return": 226930317015303.72,
+    "cagr": 3357.753841,
+    "sharpe": 13.2312,
+    "sortino": 37.695,
+    "calmar": 9037.0263,
+    "max_dd": -0.371555,
+    "win_rate": 0.7415,
+    "profit_factor": 3.1087,
+    "mean_daily_return": 0.02302451,
+    "std_daily_return": 0.03324583
+  },
+  "portfolio_without_costs": {
+    "name": "no_cost_portfolio",
+    "n_trades": 4851,
+    "n_days": 1486,
+    "n_hodl": 0,
+    "total_return": 4.9136681693059685e+20,
+    "cagr": 120876.080159,
+    "sharpe": 18.4192,
+    "sortino": 57.9623,
+    "calmar": 764618.3825,
+    "max_dd": -0.158087,
+    "win_rate": 0.7732,
+    "profit_factor": 4.9096,
+    "mean_daily_return": 0.03314436,
+    "std_daily_return": 0.0343784
+  },
+  "verdict": "ALPHA SURVIVES"
+}

@@ -1,0 +1,40 @@
+{
+  "experiment": "QV2_Phase4",
+  "protocol": {
+    "lookahead": 5,
+    "stride": 5,
+    "embargo": 1
+  },
+  "aborted": false,
+  "elapsed_seconds": 6606.3,
+  "experiments": {
+    "full": {
+      "status": "ok",
+      "experiment": "full"
+    },
+    "bull": {
+      "status": "ok",
+      "experiment": "bull"
+    },
+    "bear": {
+      "status": "ok",
+      "experiment": "bear"
+    },
+    "sideways": {
+      "status": "ok",
+      "experiment": "sideways"
+    },
+    "high_vol": {
+      "status": "ok",
+      "experiment": "high_vol"
+    },
+    "medium_vol": {
+      "status": "ok",
+      "experiment": "medium_vol"
+    },
+    "low_vol": {
+      "status": "ok",
+      "experiment": "low_vol"
+    }
+  }
+}

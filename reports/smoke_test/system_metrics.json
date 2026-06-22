@@ -1,0 +1,8 @@
+{
+  "redis_uptime_s": 73874,
+  "connected_clients": 10,
+  "used_memory_human": "671.95M",
+  "total_system_memory": "3.83G",
+  "ticks_total": 4396665,
+  "notifications_count": 7
+}

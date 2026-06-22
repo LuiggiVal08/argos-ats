@@ -1,0 +1,130 @@
+{
+  "phase": "quant_validation_v2_phase5",
+  "protocol": {
+    "lookahead": 5,
+    "stride": 5,
+    "embargo": 1,
+    "cost_per_side": 0.0,
+    "symbols": [
+      "BTC",
+      "ETH",
+      "SOL"
+    ]
+  },
+  "correlations": {
+    "mean_signal_spearman": 0.5635,
+    "mean_return_spearman": 0.4765333333333333,
+    "pairwise_signal": {
+      "BTC": {
+        "BTC": 1.0,
+        "ETH": 0.6098,
+        "SOL": 0.5522
+      },
+      "ETH": {
+        "BTC": 0.6098,
+        "ETH": 1.0,
+        "SOL": 0.5285
+      },
+      "SOL": {
+        "BTC": 0.5522,
+        "ETH": 0.5285,
+        "SOL": 1.0
+      }
+    },
+    "pairwise_return": {
+      "BTC": {
+        "BTC": 1.0,
+        "ETH": 0.5215,
+        "SOL": 0.4461
+      },
+      "ETH": {
+        "BTC": 0.5215,
+        "ETH": 1.0,
+        "SOL": 0.462
+      },
+      "SOL": {
+        "BTC": 0.4461,
+        "ETH": 0.462,
+        "SOL": 1.0
+      }
+    }
+  },
+  "best_asset": {
+    "symbol": "SOL",
+    "sharpe": 14.7901
+  },
+  "worst_asset": {
+    "symbol": "BTC",
+    "sharpe": 13.6237
+  },
+  "individual_metrics": {
+    "BTC": {
+      "n_trades": 3677,
+      "n_days": 1476,
+      "total_return": 71192156580.56702,
+      "cagr": 481.722622,
+      "sharpe": 13.6237,
+      "sortino": 36.4762,
+      "calmar": 6681.4016,
+      "max_dd": -0.072099,
+      "win_rate": 0.7316,
+      "profit_factor": 3.6771,
+      "expectancy": 0.006986,
+      "mean_daily_return": 0.017404,
+      "std_daily_return": 0.024406
+    },
+    "ETH": {
+      "n_trades": 3767,
+      "n_days": 1483,
+      "total_return": 1247609242866728.0,
+      "cagr": 5192.833053,
+      "sharpe": 14.0498,
+      "sortino": 36.656,
+      "calmar": 45040.3799,
+      "max_dd": -0.115293,
+      "win_rate": 0.7332,
+      "profit_factor": 3.7522,
+      "expectancy": 0.009552,
+      "mean_daily_return": 0.024264,
+      "std_daily_return": 0.032995
+    },
+    "SOL": {
+      "n_trades": 4057,
+      "n_days": 1486,
+      "total_return": 1.8637425129355896e+21,
+      "cagr": 167708.024146,
+      "sharpe": 14.7901,
+      "sortino": 37.8971,
+      "calmar": 767278.665,
+      "max_dd": -0.218575,
+      "win_rate": 0.7331,
+      "profit_factor": 3.5711,
+      "expectancy": 0.012612,
+      "mean_daily_return": 0.034433,
+      "std_daily_return": 0.044479
+    }
+  },
+  "portfolio_metrics": {
+    "n_trades": 5503,
+    "n_days": 1486,
+    "total_return": 4.1145400357437964e+19,
+    "cagr": 65732.10794,
+    "sharpe": 17.7781,
+    "sortino": 41.3698,
+    "calmar": 369027.2109,
+    "max_dd": -0.178123,
+    "win_rate": 0.7391,
+    "profit_factor": 4.2718,
+    "expectancy": 0.008481,
+    "mean_daily_return": 0.031407,
+    "std_daily_return": 0.033751
+  },
+  "verdicts": {
+    "diversification_benefit": true,
+    "concentration_risk": false,
+    "portfolio_sharpe": 17.7781,
+    "mean_individual_sharpe": 14.154533333333333,
+    "min_individual_sharpe": 13.6237
+  },
+  "elapsed_s": 0.4
+}

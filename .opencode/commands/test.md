@@ -3,7 +3,7 @@ description: Ejecuta la suite de tests de data-engine y analytics-engine, con re
 agent: build
 ---
 
-Run the test suite for the argos-bot engines and produce a unified report.
+Run the test suite for the argos-ats engines and produce a unified report.
 
 Target engine: $1 (optional — `data-engine`, `analytics-engine`, or empty for both).
 

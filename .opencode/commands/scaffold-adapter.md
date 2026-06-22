@@ -3,7 +3,7 @@ description: Genera un Adaptador de Infraestructura que implementa un puerto exi
 agent: build
 ---
 
-You are scaffolding a new Infrastructure adapter for the argos-bot project.
+You are scaffolding a new Infrastructure adapter for the argos-ats project.
 
 Target engine: $1 (`data-engine` or `analytics-engine`).
 Port to implement: $2.

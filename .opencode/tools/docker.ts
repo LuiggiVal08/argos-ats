@@ -9,7 +9,7 @@ const dc = (args: string[]) =>
 
 export const docker_ps = tool({
   description:
-    "List compose services for argos-bot with status and health. Only use when the stack is deployed via Docker Compose. For bare-metal deployments use health_health_check instead.",
+    "List compose services for argos-ats with status and health. Only use when the stack is deployed via Docker Compose. For bare-metal deployments use health_health_check instead.",
   args: {},
   async execute() {
     return { title: "docker compose ps", output: dc(["ps"]) }

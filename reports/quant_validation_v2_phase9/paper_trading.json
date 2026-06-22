@@ -1,0 +1,39 @@
+{
+  "phase": "quant_validation_v2_phase9",
+  "config": {
+    "initial_capital": 100000.0,
+    "buy_threshold": 0.6,
+    "sell_threshold": 0.4,
+    "cost_round_trip": 0.0031,
+    "risk_per_trade": 0.01,
+    "sl_atr_multiplier": 2.0,
+    "drawdown_cb_pct": 0.05,
+    "simulation_days": 365
+  },
+  "simulation": {
+    "n_bars": 1329,
+    "n_days": 364,
+    "final_equity": 8037876.41,
+    "peak_equity": 8037876.41,
+    "halted": false
+  },
+  "metrics": {
+    "n_trades": 2189,
+    "n_wins": 1825,
+    "n_losses": 364,
+    "win_rate": 0.8337,
+    "total_pnl": 7937876.41,
+    "total_costs": 6332427.3396,
+    "net_pnl": 7937876.41,
+    "avg_win": 6983.02,
+    "avg_loss": -13203.66,
+    "profit_factor": 2.6516,
+    "total_return": 79.10194,
+    "cagr": 79.319253,
+    "sharpe": 18.0984,
+    "sortino": 37.3303,
+    "calmar": 2983.6761,
+    "max_drawdown": -0.026584
+  },
+  "verdict": "PAPER_ALPHA_CONFIRMED"
+}

@@ -1,0 +1,47 @@
+# Git
+.git
+.gitattributes
+.gitignore
+
+# Node (general: exclude from context)
+node_modules
+!apps/data-engine/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+npm-debug.log
+
+# Python (analytics-engine)
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+*.egg-info
+
+# Build outputs
+dist
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Project specific
+logs
+data
+reports
+models
+state
+session-test
+experiments
+archive
+notebooks
+data_export

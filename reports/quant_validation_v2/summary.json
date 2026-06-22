@@ -1,0 +1,47 @@
+{
+  "experiment": "QV2_vs_QV1",
+  "symbol": "BTC/USDT",
+  "timeframe": "1h",
+  "qv2_features": {
+    "base_ta": 20,
+    "mtf_4h": 15,
+    "mtf_1d": 15,
+    "funding": 3,
+    "total": 53
+  },
+  "comparisons": [
+    {
+      "phase": "3A_multiclass",
+      "qv1_metric": 0.3105,
+      "qv2_metric": 0.5331,
+      "delta": 0.2226,
+      "qv2_improves": true,
+      "qv1_shuffle_delta": 0.0118,
+      "qv2_shuffle_delta": 0.2487,
+      "shuffle_improved": true
+    },
+    {
+      "phase": "3B_binary",
+      "qv1_metric": 0.4674,
+      "qv2_metric": 0.7685,
+      "delta": 0.3012,
+      "qv2_improves": true,
+      "qv1_shuffle_delta": 0.0128,
+      "qv2_shuffle_delta": 0.312,
+      "shuffle_improved": true
+    },
+    {
+      "phase": "3C_regression",
+      "qv1_metric": -0.0136,
+      "qv2_metric": 0.3063,
+      "delta": 0.3199,
+      "qv2_improves": true,
+      "qv1_shuffle_delta": -0.0114,
+      "qv2_shuffle_delta": 0.5429,
+      "shuffle_improved": true
+    }
+  ],
+  "any_improvement": true,
+  "any_shuffle_positive": true,
+  "verdict": "H1 (calificado): MTF + funding contienen se\u00f1al genuina \u2014 QV2 mejora dr\u00e1sticamente sobre QV1 (f1: 0.311\u21920.533, 0.467\u21920.769, R\u00b2: -0.014\u21920.306) con shuffle deltas >0.24. Sin embargo, ning\u00fan modelo supera persist_last_label, que explota autocorrelaci\u00f3n de labels traslapados (lookahead=5, stride=1). La se\u00f1al EXISTE pero la evaluaci\u00f3n no la detecta. Se recomienda redise\u00f1ar labels (non-overlapping) antes de Phase 4."
+}

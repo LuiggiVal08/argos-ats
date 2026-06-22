@@ -1,4 +1,4 @@
-# Argos Bot — Plan de Negocio
+# Argos ATS — Plan de Negocio
 
 > Documento vivo. Ideas, posibilidades y decisiones sobre el modelo de negocio.
 > Última actualización: 2026-06-13
@@ -7,7 +7,7 @@
 
 ## 1. Visión / Propuesta de valor
 
-<!-- ¿Qué problema resuelve el bot? ¿Para quién? ¿Qué lo diferencia de otras herramientas? -->
+<!-- ¿Qué problema resuelve el ATS? ¿Para quién? ¿Qué lo diferencia de otras herramientas? -->
 
 Preguntas guía:
 - ¿Automatizar trading para personas sin tiempo técnico?

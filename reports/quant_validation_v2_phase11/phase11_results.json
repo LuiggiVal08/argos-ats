@@ -1,0 +1,21 @@
+{
+  "n_trades": 7007,
+  "n_wins": 5464,
+  "n_losses": 1543,
+  "win_rate": 0.7798,
+  "profit_factor": 5.9425,
+  "total_return": 34540943.9556,
+  "cagr": 47.9898,
+  "sharpe": 4.5976,
+  "sortino": 14.0033,
+  "calmar": 67.4146,
+  "max_drawdown": -0.711861,
+  "ulcer_index": 0.315628,
+  "recovery_factor": 48522058.5353,
+  "time_under_water_pct": 57.37,
+  "avg_duration_bars": 5.3,
+  "exposure_pct": 54.97,
+  "total_costs": 1111919559351.37,
+  "final_equity": 3454094495560.03,
+  "peak_equity": 3454094495560.03
+}

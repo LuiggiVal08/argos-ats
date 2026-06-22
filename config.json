@@ -1,5 +1,5 @@
 {
-  "environment_mode": "PAPER_TRADING",
+  "environment_mode": "LIVE_SIMULATION",
   "risk_pct": 0.01,
   "drawdown_pct": 0.05,
   "broker": {
@@ -9,7 +9,7 @@
   },
   "exchanges": [
     {
-      "id": "binance",
+      "id": "binanceusdm",
       "type": "perpetual_futures",
       "testnet": true
     }

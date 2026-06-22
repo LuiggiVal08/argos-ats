@@ -1,0 +1,149 @@
+{
+  "experiment": "quant_validation_v1",
+  "symbol": "BTC/USDT",
+  "timeframe": "1h",
+  "features": 20,
+  "feature_source": "OHLCV + TA",
+  "framings": {
+    "3A_multiclass": {
+      "gate": "FAIL",
+      "details": {
+        "best_model": "RandomForest",
+        "best_model_f1": 0.3105,
+        "best_null": "persist_last_label",
+        "best_null_f1": 0.6848,
+        "beats_null": false,
+        "best_shuffle_delta": 0.0118,
+        "gate_pass": false
+      },
+      "nulls": [
+        {
+          "strategy": "always_HOLD",
+          "accuracy": 0.4835463136059822,
+          "kappa": 0.0,
+          "f1_macro": 0.2172929864839205,
+          "mcc": 0.0
+        },
+        {
+          "strategy": "always_BUY",
+          "accuracy": 0.26320776460344697,
+          "kappa": 0.0,
+          "f1_macro": 0.13890972489711517,
+          "mcc": 0.0
+        },
+        {
+          "strategy": "always_SELL",
+          "accuracy": 0.2532459217905708,
+          "kappa": 0.0,
+          "f1_macro": 0.13471467298758974,
+          "mcc": 0.0
+        },
+        {
+          "strategy": "persist_last_label",
+          "accuracy": 0.6876744602934775,
+          "kappa": 0.5064162684119357,
+          "f1_macro": 0.6848164259641623,
+          "mcc": 0.5064162684119358
+        }
+      ]
+    },
+    "3B_binary": {
+      "gate": "FAIL",
+      "details": {
+        "best_model": "HistGradientBoosting",
+        "best_model_f1": 0.4674,
+        "best_null": "persist_last_label",
+        "best_null_f1": 0.8105,
+        "beats_null": false,
+        "best_shuffle_delta": 0.0128,
+        "gate_pass": false
+      },
+      "nulls": {
+        "always_SELL": {
+          "strategy": "always_SELL",
+          "accuracy": 0.490355531313532,
+          "kappa": 0.0,
+          "f1_macro": 0.3290191642267767,
+          "mcc": 0.0,
+          "r2": 0.0,
+          "mae": 0.0,
+          "dir_acc": 0.0,
+          "ic": 0.0
+        },
+        "always_BUY": {
+          "strategy": "always_BUY",
+          "accuracy": 0.509644468686468,
+          "kappa": 0.0,
+          "f1_macro": 0.33759237970110034,
+          "mcc": 0.0,
+          "r2": 0.0,
+          "mae": 0.0,
+          "dir_acc": 0.0,
+          "ic": 0.0
+        },
+        "persist_last_label": {
+          "strategy": "persist_last_label",
+          "accuracy": 0.8105816432786235,
+          "kappa": 0.6210222829311172,
+          "f1_macro": 0.8105111414655586,
+          "mcc": 0.6210222829311173,
+          "r2": 0.0,
+          "mae": 0.0,
+          "dir_acc": 0.0,
+          "ic": 0.0
+        }
+      }
+    },
+    "3C_regression": {
+      "gate": "FAIL",
+      "details": {
+        "best_model": "Ridge",
+        "best_model_r2": -0.0136,
+        "best_null": "persist_last_value",
+        "best_null_r2": 0.5714,
+        "beats_null_r2": false,
+        "best_shuffle_delta": -0.0114,
+        "gate_pass": false
+      },
+      "nulls": {
+        "predict_zero": {
+          "strategy": "predict_zero",
+          "accuracy": 0.0,
+          "kappa": 0.0,
+          "f1_macro": 0.0,
+          "mcc": 0.0,
+          "r2": -6.330018116385006e-05,
+          "mae": 0.7869536111048911,
+          "dir_acc": 5.130178273695011e-05,
+          "ic": 0.0
+        },
+        "predict_mean": {
+          "strategy": "predict_mean",
+          "accuracy": 0.0,
+          "kappa": 0.0,
+          "f1_macro": 0.0,
+          "mcc": 0.0,
+          "r2": 0.0,
+          "mae": 0.7868652013046559,
+          "dir_acc": 0.5073233294856996,
+          "ic": 0.0
+        },
+        "persist_last_value": {
+          "strategy": "persist_last_value",
+          "accuracy": 0.0,
+          "kappa": 0.0,
+          "f1_macro": 0.0,
+          "mcc": 0.0,
+          "r2": 0.5713678850464381,
+          "mae": 0.5179925283770472,
+          "dir_acc": 0.768680261639092,
+          "ic": 0.7856989370957946
+        }
+      }
+    }
+  },
+  "global_gate": "ALL_FAIL",
+  "verdict": "H0 NOT REJECTED. Ning\u00fan framing supera el baseline de persistencia. El shuffle delta es negativo o cercano a cero en todos los modelos. OHLCV + TA (20 features) en timeframe 1h no contiene alpha explotable suficiente para justificar continuar con ML supervisado. Cerrar esta l\u00ednea de investigaci\u00f3n.",
+  "conclusion": "H0 NO SE RECHAZA. No existe se\u00f1al predictiva explotable en OHLCV+TA 1h para BTC/USDT. Todos los modelos son derrotados por persistencia ingenua debido a la autocorrelaci\u00f3n artificial de labels traslapados. Incluso contra baselines no-persistentes, el shuffle delta es insignificante (< 0.013 en todos los casos). Se cierra esta l\u00ednea de investigaci\u00f3n con ML supervisado sobre este feature space.",
+  "recommendation": "Explorar fuentes alternativas de datos: order flow, funding rates, open interest, on-chain metrics. O cambiar de framing completamente (e.g. regime detection, anomaly detection, cross-asset relative value)."
+}

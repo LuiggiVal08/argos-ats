@@ -42,7 +42,7 @@ Changes:
 - Expose broker port (optional, for debug)
 
 ```yaml
-# Argos bot - production-grade trading bot stack
+# Argos ATS - production-grade Automated Trading System stack
 services:
   data-engine:
     build: ./apps/data-engine
@@ -131,7 +131,7 @@ volumes:
 **File**: `.env.example`
 
 ```
-# Argos bot - root env file
+# Argos ATS - root env file
 # Copy to .env and fill in your values.
 
 # --- Mode ---

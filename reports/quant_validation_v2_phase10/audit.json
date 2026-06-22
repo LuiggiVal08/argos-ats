@@ -1,0 +1,528 @@
+{
+  "phase": "quant_validation_v2_phase10",
+  "symbol": "BTC",
+  "exchange": "binance",
+  "protocol": {
+    "lookahead": 5,
+    "stride": 5,
+    "embargo": 1
+  },
+  "audits": {
+    "10.1_features": {
+      "symbol": "BTC",
+      "n_features": 53,
+      "n_rows": 39049,
+      "first_valid_base_row": 0,
+      "features": [
+        {
+          "name": "open",
+          "index": 0,
+          "source": "base_1h",
+          "window": "unknown",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "high",
+          "index": 1,
+          "source": "base_1h",
+          "window": "unknown",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "low",
+          "index": 2,
+          "source": "base_1h",
+          "window": "unknown",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "close",
+          "index": 3,
+          "source": "base_1h",
+          "window": "unknown",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "volume",
+          "index": 4,
+          "source": "base_1h",
+          "window": "unknown",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "rsi",
+          "index": 5,
+          "source": "base_1h",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "ema_fast",
+          "index": 6,
+          "source": "base_1h",
+          "window": "9",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "ema_medium",
+          "index": 7,
+          "source": "base_1h",
+          "window": "21",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "ema_slow",
+          "index": 8,
+          "source": "base_1h",
+          "window": "50",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "macd",
+          "index": 9,
+          "source": "base_1h",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "macd_signal",
+          "index": 10,
+          "source": "base_1h",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "macd_hist",
+          "index": 11,
+          "source": "base_1h",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "bb_upper",
+          "index": 12,
+          "source": "base_1h",
+          "window": "(20, 2)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "bb_middle",
+          "index": 13,
+          "source": "base_1h",
+          "window": "20",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "bb_lower",
+          "index": 14,
+          "source": "base_1h",
+          "window": "(20, 2)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "atr",
+          "index": 15,
+          "source": "base_1h",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "adx",
+          "index": 16,
+          "source": "base_1h",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "obv",
+          "index": 17,
+          "source": "base_1h",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "volume_sma",
+          "index": 18,
+          "source": "base_1h",
+          "window": "20",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "pct_change",
+          "index": 19,
+          "source": "base_1h",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_rsi_4h",
+          "index": 20,
+          "source": "mtf_4h",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_ema_fast_4h",
+          "index": 21,
+          "source": "mtf_4h",
+          "window": "9",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_ema_medium_4h",
+          "index": 22,
+          "source": "mtf_4h",
+          "window": "21",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_ema_slow_4h",
+          "index": 23,
+          "source": "mtf_4h",
+          "window": "50",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_macd_4h",
+          "index": 24,
+          "source": "mtf_4h",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_macd_signal_4h",
+          "index": 25,
+          "source": "mtf_4h",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_macd_hist_4h",
+          "index": 26,
+          "source": "mtf_4h",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_bb_upper_4h",
+          "index": 27,
+          "source": "mtf_4h",
+          "window": "(20, 2)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_bb_middle_4h",
+          "index": 28,
+          "source": "mtf_4h",
+          "window": "20",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_bb_lower_4h",
+          "index": 29,
+          "source": "mtf_4h",
+          "window": "(20, 2)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_atr_4h",
+          "index": 30,
+          "source": "mtf_4h",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_adx_4h",
+          "index": 31,
+          "source": "mtf_4h",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_obv_4h",
+          "index": 32,
+          "source": "mtf_4h",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_volume_sma_4h",
+          "index": 33,
+          "source": "mtf_4h",
+          "window": "20",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_pct_change_4h",
+          "index": 34,
+          "source": "mtf_4h",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_rsi_1d",
+          "index": 35,
+          "source": "mtf_1d",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_ema_fast_1d",
+          "index": 36,
+          "source": "mtf_1d",
+          "window": "9",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_ema_medium_1d",
+          "index": 37,
+          "source": "mtf_1d",
+          "window": "21",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_ema_slow_1d",
+          "index": 38,
+          "source": "mtf_1d",
+          "window": "50",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_macd_1d",
+          "index": 39,
+          "source": "mtf_1d",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_macd_signal_1d",
+          "index": 40,
+          "source": "mtf_1d",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_macd_hist_1d",
+          "index": 41,
+          "source": "mtf_1d",
+          "window": "(12, 26, 9)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_bb_upper_1d",
+          "index": 42,
+          "source": "mtf_1d",
+          "window": "(20, 2)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_bb_middle_1d",
+          "index": 43,
+          "source": "mtf_1d",
+          "window": "20",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_bb_lower_1d",
+          "index": 44,
+          "source": "mtf_1d",
+          "window": "(20, 2)",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_atr_1d",
+          "index": 45,
+          "source": "mtf_1d",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_adx_1d",
+          "index": 46,
+          "source": "mtf_1d",
+          "window": "14",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_obv_1d",
+          "index": 47,
+          "source": "mtf_1d",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_volume_sma_1d",
+          "index": 48,
+          "source": "mtf_1d",
+          "window": "20",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "htf_pct_change_1d",
+          "index": 49,
+          "source": "mtf_1d",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "funding_rate",
+          "index": 50,
+          "source": "funding",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "funding_momentum",
+          "index": 51,
+          "source": "funding",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        },
+        {
+          "name": "funding_change",
+          "index": 52,
+          "source": "funding",
+          "window": "None",
+          "first_valid_row": 0,
+          "first_valid_pct": 0.0
+        }
+      ],
+      "suspicious_early_features": [],
+      "verdict": "PASS",
+      "explanation": "No features have explicit lookahead windows. 0 MTF/funding features have valid values before base TA stabilizes \u2014 possibly from bfill(). This is expected for MTF features (resampled values available earlier than raw TA) but warrants investigation."
+    },
+    "10.2_mtf_alignment": {
+      "symbol": "BTC",
+      "n_subsample_rows_checked": 2000,
+      "n_mtf_features": 30,
+      "violations": [],
+      "n_violations": 0,
+      "bfill_potential_violations": 60,
+      "bfill_examples": [
+        {
+          "row": 5,
+          "bar_timestamp": "2022-01-01 05:00:00",
+          "feature": "htf_rsi_1d",
+          "note": "Potential bfill: 1d MTF feature before first daily close"
+        },
+        {
+          "row": 5,
+          "bar_timestamp": "2022-01-01 05:00:00",
+          "feature": "htf_ema_fast_1d",
+          "note": "Potential bfill: 1d MTF feature before first daily close"
+        },
+        {
+          "row": 5,
+          "bar_timestamp": "2022-01-01 05:00:00",
+          "feature": "htf_ema_medium_1d",
+          "note": "Potential bfill: 1d MTF feature before first daily close"
+        },
+        {
+          "row": 5,
+          "bar_timestamp": "2022-01-01 05:00:00",
+          "feature": "htf_ema_slow_1d",
+          "note": "Potential bfill: 1d MTF feature before first daily close"
+        },
+        {
+          "row": 5,
+          "bar_timestamp": "2022-01-01 05:00:00",
+          "feature": "htf_macd_1d",
+          "note": "Potential bfill: 1d MTF feature before first daily close"
+        }
+      ],
+      "spot_checks_passed": 50,
+      "verdict": "WARNING",
+      "explanation": "Checked 60000 MTF feature \u00d7 row combinations across 2000 subsample rows. Zero timestamp violations: MTF features use reindex(method='ffill') from completed buckets, so at bar t the value is always from bars \u2264 t. bfill() in common.py line 148 propagates the first MTF value backward \u2014 this affects the first ~23h of 1d features (60 potential bfill rows detected in first 100 subsample rows). This is <0.1% of the dataset and has no effect on stride=5 predictions after the first day. 50 spot checks passed (MTF recomputed on partial data matches full pipeline). No leakage found beyond the documented bfill warmup."
+    },
+    "10.3_funding_alignment": {
+      "symbol": "BTC",
+      "n_bars_checked": 2000,
+      "n_funding_rates": 4882,
+      "violations": [],
+      "n_violations": 0,
+      "verdict": "PASS",
+      "explanation": "Funding timestamps vs bar timestamps. 0 violations found."
+    },
+    "10.4_target": {
+      "symbol": "BTC",
+      "lookahead": 5,
+      "n_subsample_indices": 7808,
+      "violations_same_bar": 0,
+      "violations_t_minus_n": 0,
+      "verdict": "PASS",
+      "explanation": "Target uses close[t+5] / close[t] - 1. Checked 7808 subsample indices. Zero violations of same-bar target (close[t+5] != close[t] for all valid bars). Forward return matches label_binary's vol_adj_returns underlying logic."
+    },
+    "10.5_walk_forward": {
+      "symbol": "BTC",
+      "n_folds": 4,
+      "embargo": 1,
+      "n_subsampled": 7808,
+      "n_binary": 4044,
+      "violations": [],
+      "n_violations": 0,
+      "verdict": "PASS",
+      "explanation": "Expanding-window walk-forward with embargo=1. All folds respect train_end + embargo <= test_start. No overlap detected."
+    }
+  },
+  "verdict": "WARNING",
+  "summary": {
+    "10.1_features": "PASS",
+    "10.2_mtf_alignment": "WARNING",
+    "10.3_funding_alignment": "PASS",
+    "10.4_target": "PASS",
+    "10.5_walk_forward": "PASS"
+  },
+  "note": "LEAKAGE DETECTED only if HARD_FAIL. The bfill() in QV2 common.py:148 creates potential lookahead for 1d features on the first ~23h of data. This affects <0.1% of rows and does NOT invalidate the pipeline for stride=5 subsampling. No other leakage found."
+}

@@ -1,0 +1,190 @@
+{
+  "verdict": "KILL",
+  "timestamp": "2026-06-21T14:55:34.591490+00:00",
+  "model_info": {
+    "type": "LogisticRegression",
+    "classes": 2,
+    "n_features": 53,
+    "coef_shape": [
+      1,
+      53
+    ],
+    "code_assumption": "3-class assumption (buy/sell/hold) in streaming_inference.py, but model is binary (2 classes, no hold output). prob_hold=0.0 is always an artifact of the code, not the model."
+  },
+  "live_stats": {
+    "n_candles": 999,
+    "date_range": [
+      "2026-05-11",
+      "2026-06-21"
+    ]
+  },
+  "drift": {
+    "mean_z_score": 3.492,
+    "max_z_score": 50.592,
+    "high_drift_features_count": 8,
+    "severe_drift_features_count": 7,
+    "collapse_count": 4,
+    "top_drift_features": [
+      {
+        "feature": "htf_volume_sma_1d",
+        "z_score": 50.59
+      },
+      {
+        "feature": "htf_volume_sma_4h",
+        "z_score": 42.99
+      },
+      {
+        "feature": "volume_sma",
+        "z_score": 35.65
+      },
+      {
+        "feature": "volume",
+        "z_score": 25.54
+      },
+      {
+        "feature": "htf_obv_4h",
+        "z_score": 4.85
+      },
+      {
+        "feature": "htf_obv_1d",
+        "z_score": 4.51
+      },
+      {
+        "feature": "obv",
+        "z_score": 4.31
+      },
+      {
+        "feature": "htf_macd_signal_1d",
+        "z_score": 2.2
+      },
+      {
+        "feature": "htf_macd_1d",
+        "z_score": 1.95
+      },
+      {
+        "feature": "htf_rsi_1d",
+        "z_score": 1.12
+      }
+    ]
+  },
+  "model_vs_null": {
+    "segment": "0-999",
+    "n_candles": 999,
+    "best_mapping": "class_1_is_up",
+    "directional_accuracy": 0.5822,
+    "log_loss": 0.83596,
+    "baseline_log_loss": 0.69315,
+    "skill_score": 0.0,
+    "avg_return": -0.000255,
+    "avg_abs_return": 0.002972,
+    "expected_value_gross": 0.000877,
+    "expected_value_net": -0.000923,
+    "cost_round_trip": 0.0018,
+    "avg_win": 0.003306,
+    "avg_loss": 0.002508,
+    "volatility": 0.004461,
+    "annualized_sharpe": 0.0,
+    "mean_entropy": 0.7186,
+    "ece": 0.1736
+  },
+  "threshold_free": {
+    "n_buy_signals": 634,
+    "n_sell_signals": 365,
+    "buy_ratio": 0.6346,
+    "imbalance": 0.1346
+  },
+  "stability": {
+    "segments": [
+      {
+        "segment": "0-249",
+        "n_candles": 249,
+        "best_mapping": "class_1_is_up",
+        "directional_accuracy": 0.5927,
+        "log_loss": 0.70684,
+        "baseline_log_loss": 0.69315,
+        "skill_score": 0.0,
+        "avg_return": -0.000214,
+        "avg_abs_return": 0.002199,
+        "expected_value_gross": 0.000676,
+        "expected_value_net": -0.001124,
+        "cost_round_trip": 0.0018,
+        "avg_win": 0.002425,
+        "avg_loss": 0.00187,
+        "volatility": 0.003055,
+        "annualized_sharpe": 0.0,
+        "mean_entropy": 0.8003,
+        "ece": 0.1438
+      },
+      {
+        "segment": "249-498",
+        "n_candles": 249,
+        "best_mapping": "class_1_is_up",
+        "directional_accuracy": 0.5847,
+        "log_loss": 0.76312,
+        "baseline_log_loss": 0.69315,
+        "skill_score": 0.0,
+        "avg_return": -0.000229,
+        "avg_abs_return": 0.002078,
+        "expected_value_gross": 0.000637,
+        "expected_value_net": -0.001163,
+        "cost_round_trip": 0.0018,
+        "avg_win": 0.002322,
+        "avg_loss": 0.001735,
+        "volatility": 0.003065,
+        "annualized_sharpe": 0.0,
+        "mean_entropy": 0.7909,
+        "ece": 0.1541
+      },
+      {
+        "segment": "498-747",
+        "n_candles": 249,
+        "best_mapping": "class_1_is_up",
+        "directional_accuracy": 0.5766,
+        "log_loss": 0.97489,
+        "baseline_log_loss": 0.69315,
+        "skill_score": 0.0,
+        "avg_return": -0.000661,
+        "avg_abs_return": 0.004778,
+        "expected_value_gross": 0.001135,
+        "expected_value_net": -0.000665,
+        "cost_round_trip": 0.0018,
+        "avg_win": 0.005127,
+        "avg_loss": 0.004302,
+        "volatility": 0.006536,
+        "annualized_sharpe": 0.0,
+        "mean_entropy": 0.607,
+        "ece": 0.2548
+      },
+      {
+        "segment": "747-999",
+        "n_candles": 252,
+        "best_mapping": "class_1_is_up",
+        "directional_accuracy": 0.5777,
+        "log_loss": 0.89277,
+        "baseline_log_loss": 0.69315,
+        "skill_score": 0.0,
+        "avg_return": 7e-05,
+        "avg_abs_return": 0.002856,
+        "expected_value_gross": 0.001066,
+        "expected_value_net": -0.000734,
+        "cost_round_trip": 0.0018,
+        "avg_win": 0.003395,
+        "avg_loss": 0.002119,
+        "volatility": 0.004255,
+        "annualized_sharpe": 1.5469,
+        "mean_entropy": 0.6774,
+        "ece": 0.2227
+      }
+    ],
+    "skill_std": 0.0,
+    "acc_std": 0.0064
+  },
+  "recommendation": "Model is WORSE than null model (skill=0.0). Net EV after costs is negative in ALL segments. Model is heavily biased toward class 1 (63% buy predictions) despite balanced training data, suggesting feature collapse or distribution shift. Do NOT use for trading. Recommend retraining with recent data (2026 H1) and recalibrating, or switching to a different model architecture.",
+  "fix_plan": [
+    "1. Remove 3-class assumption in streaming_inference.py \u2014 prob_hold=0.0 is an artifact of the code, not the model",
+    "2. Recalibrate thresholds to percentile-based values matching actual probability distribution on live data",
+    "3. Alternative: remove hard thresholds entirely; use raw probabilities with position sizing (Kelly / volatility scaling)",
+    "4. Add cost-aware execution layer (fees + slippage) to signal filtering to avoid negative-EV trades",
+    "5. If MARGINAL: add regime gate to only trade when model entropy < threshold (i.e., when model is confident)"
+  ]
+}

@@ -1,9 +1,9 @@
 ---
-description: Revisa código del argos-bot para detectar violaciones a la arquitectura hexagonal
+description: Revisa código del argos-ats para detectar violaciones a la arquitectura hexagonal
 agent: plan
 ---
 
-You are performing a read-only architecture review of the argos-bot project.
+You are performing a read-only architecture review of the argos-ats project.
 
 Scope: $1 (a file path or glob, default `apps/`).
 

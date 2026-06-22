@@ -116,6 +116,11 @@ async def predict_signal(
 async def model_info(request: Request) -> dict:
     from fastapi.responses import JSONResponse
     use_cases = await get_model_use_cases(request)
+
+    if use_cases.predict is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="model backend unavailable (TensorFlow not installed)")
+
     try:
         model = await use_cases.predict.load_model()
     except PredictSignalError as e:

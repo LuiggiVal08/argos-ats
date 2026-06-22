@@ -1,0 +1,17 @@
+{
+  "stream": "state:checkpoint",
+  "description": "Snapshot of system state for crash recovery and resume",
+  "version": 1,
+  "fields": {
+    "last_processed_timestamp": { "type": "integer", "required": true, "min": 0, "description": "Monotonic clock of last processed event" },
+    "last_candle_timestamp":    { "type": "integer", "required": true, "min": 0, "description": "Close timestamp of last processed candle (ms UTC)" },
+    "last_signal_id":           { "type": "string", "required": false, "pattern": "^[0-9a-f-]{36}$", "description": "UUID of last signal processed" },
+    "last_order_id":            { "type": "string", "required": false, "pattern": "^[0-9a-f-]{36}$", "description": "UUID of last order submitted" },
+    "last_fill_id":             { "type": "string", "required": false, "pattern": "^[0-9a-f-]{36}$", "description": "UUID of last fill received" },
+    "open_positions":           { "type": "string", "required": false, "description": "JSON-encoded array of open position records" },
+    "equity":                   { "type": "number", "required": true, "min": 0, "description": "Account equity at checkpoint (quote currency)" },
+    "mode":                     { "type": "string", "required": true, "enum": ["BACKTESTING", "PAPER_TRADING", "LIVE", "LIVE_SIMULATION"] },
+    "engine":                   { "type": "string", "required": true, "enum": ["data-engine", "analytics-engine"] },
+    "schema_version":           { "type": "integer", "required": true, "const": 1 }
+  }
+}

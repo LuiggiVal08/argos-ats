@@ -1,0 +1,17 @@
+{
+  "data_engine": {
+    "status": "ok",
+    "mode": "PAPER_TRADING",
+    "broker": true
+  },
+  "analytics_engine": {
+    "status": "ok",
+    "mode": "PAPER_TRADING"
+  },
+  "containers": [
+    "argos-analytics-engine Up 21 hours (healthy)",
+    "argos-data-engine Up 21 hours (healthy)",
+    "argos-broker Up 21 hours (healthy)"
+  ],
+  "timestamp": "2026-06-19T18:49:33.604620"
+}

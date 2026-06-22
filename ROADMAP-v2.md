@@ -10,7 +10,7 @@
 
 # 1. Visión General
 
-ARGOS 2.0 evoluciona desde un bot de trading basado en una única red neuronal LSTM hacia una plataforma cuantitativa modular orientada a eventos y desacoplada por dominios.
+ARGOS 2.0 evoluciona desde un sistema de trading basado en una única red neuronal LSTM hacia una plataforma cuantitativa modular orientada a eventos y desacoplada por dominios.
 
 La arquitectura se diseña bajo los siguientes principios:
 

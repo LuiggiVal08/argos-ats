@@ -1,0 +1,852 @@
+{
+  "phase": "quant_validation_v2_phase6",
+  "per_symbol": {
+    "BTC": {
+      "symbol": "BTC",
+      "n_predictions": 3677,
+      "class_balance": {
+        "buy_pct": 0.5099,
+        "sell_pct": 0.4901
+      },
+      "brier_score": 0.185249,
+      "ece": 0.04254,
+      "ece_bins": [
+        {
+          "bin": 0,
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "n": 406,
+          "conf": 0.0412,
+          "acc": 0.1256,
+          "gap": 0.0844
+        },
+        {
+          "bin": 1,
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "n": 312,
+          "conf": 0.147,
+          "acc": 0.1827,
+          "gap": 0.0357
+        },
+        {
+          "bin": 2,
+          "bin_lower": 0.2,
+          "bin_upper": 0.30000000000000004,
+          "n": 323,
+          "conf": 0.2509,
+          "acc": 0.2446,
+          "gap": 0.0063
+        },
+        {
+          "bin": 3,
+          "bin_lower": 0.30000000000000004,
+          "bin_upper": 0.4,
+          "n": 329,
+          "conf": 0.3474,
+          "acc": 0.31,
+          "gap": 0.0374
+        },
+        {
+          "bin": 4,
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "n": 335,
+          "conf": 0.4532,
+          "acc": 0.4657,
+          "gap": 0.0125
+        },
+        {
+          "bin": 5,
+          "bin_lower": 0.5,
+          "bin_upper": 0.6000000000000001,
+          "n": 390,
+          "conf": 0.5499,
+          "acc": 0.5513,
+          "gap": 0.0014
+        },
+        {
+          "bin": 6,
+          "bin_lower": 0.6000000000000001,
+          "bin_upper": 0.7000000000000001,
+          "n": 382,
+          "conf": 0.6502,
+          "acc": 0.623,
+          "gap": 0.0272
+        },
+        {
+          "bin": 7,
+          "bin_lower": 0.7000000000000001,
+          "bin_upper": 0.8,
+          "n": 346,
+          "conf": 0.7518,
+          "acc": 0.7775,
+          "gap": 0.0257
+        },
+        {
+          "bin": 8,
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "n": 356,
+          "conf": 0.8494,
+          "acc": 0.8062,
+          "gap": 0.0432
+        },
+        {
+          "bin": 9,
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "n": 498,
+          "conf": 0.9605,
+          "acc": 0.8454,
+          "gap": 0.1151
+        }
+      ],
+      "overconfidence": {
+        "mean_confidence": 0.5204,
+        "mean_accuracy": 0.5099,
+        "overconfidence": 0.0104,
+        "max_overconfidence": 0.9955,
+        "mean_overconfidence": 0.0104
+      },
+      "platt_scaling": {
+        "original_brier": 0.185249,
+        "original_ece": 0.04254,
+        "platt_brier": 0.185286,
+        "platt_ece": 0.047914,
+        "brier_improvement_pct": -0.02,
+        "ece_improvement_pct": -12.63,
+        "platt_calibrated_bins": [
+          {
+            "bin": 0,
+            "bin_lower": 0.0,
+            "bin_upper": 0.1,
+            "n": 205,
+            "conf": 0.051,
+            "acc": 0.0878,
+            "gap": 0.0368
+          },
+          {
+            "bin": 1,
+            "bin_lower": 0.1,
+            "bin_upper": 0.2,
+            "n": 262,
+            "conf": 0.1531,
+            "acc": 0.1832,
+            "gap": 0.0301
+          },
+          {
+            "bin": 2,
+            "bin_lower": 0.2,
+            "bin_upper": 0.30000000000000004,
+            "n": 340,
+            "conf": 0.2511,
+            "acc": 0.1706,
+            "gap": 0.0805
+          },
+          {
+            "bin": 3,
+            "bin_lower": 0.30000000000000004,
+            "bin_upper": 0.4,
+            "n": 459,
+            "conf": 0.3522,
+            "acc": 0.2832,
+            "gap": 0.069
+          },
+          {
+            "bin": 4,
+            "bin_lower": 0.4,
+            "bin_upper": 0.5,
+            "n": 496,
+            "conf": 0.4538,
+            "acc": 0.4496,
+            "gap": 0.0042
+          },
+          {
+            "bin": 5,
+            "bin_lower": 0.5,
+            "bin_upper": 0.6000000000000001,
+            "n": 546,
+            "conf": 0.5487,
+            "acc": 0.5714,
+            "gap": 0.0227
+          },
+          {
+            "bin": 6,
+            "bin_lower": 0.6000000000000001,
+            "bin_upper": 0.7000000000000001,
+            "n": 479,
+            "conf": 0.648,
+            "acc": 0.7265,
+            "gap": 0.0785
+          },
+          {
+            "bin": 7,
+            "bin_lower": 0.7000000000000001,
+            "bin_upper": 0.8,
+            "n": 371,
+            "conf": 0.7478,
+            "acc": 0.8086,
+            "gap": 0.0608
+          },
+          {
+            "bin": 8,
+            "bin_lower": 0.8,
+            "bin_upper": 0.9,
+            "n": 261,
+            "conf": 0.8494,
+            "acc": 0.7969,
+            "gap": 0.0525
+          },
+          {
+            "bin": 9,
+            "bin_lower": 0.9,
+            "bin_upper": 1.0,
+            "n": 258,
+            "conf": 0.9432,
+            "acc": 0.8915,
+            "gap": 0.0518
+          }
+        ]
+      },
+      "verdicts": {
+        "calibration": "CALIBRATED",
+        "bias": "WELL_CALIBRATED",
+        "fixable_by_platt": false
+      }
+    },
+    "ETH": {
+      "symbol": "ETH",
+      "n_predictions": 3767,
+      "class_balance": {
+        "buy_pct": 0.5121,
+        "sell_pct": 0.4879
+      },
+      "brier_score": 0.184741,
+      "ece": 0.049939,
+      "ece_bins": [
+        {
+          "bin": 0,
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "n": 337,
+          "conf": 0.0474,
+          "acc": 0.0593,
+          "gap": 0.012
+        },
+        {
+          "bin": 1,
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "n": 272,
+          "conf": 0.1497,
+          "acc": 0.1801,
+          "gap": 0.0305
+        },
+        {
+          "bin": 2,
+          "bin_lower": 0.2,
+          "bin_upper": 0.30000000000000004,
+          "n": 299,
+          "conf": 0.2511,
+          "acc": 0.1639,
+          "gap": 0.0872
+        },
+        {
+          "bin": 3,
+          "bin_lower": 0.30000000000000004,
+          "bin_upper": 0.4,
+          "n": 352,
+          "conf": 0.3511,
+          "acc": 0.3409,
+          "gap": 0.0102
+        },
+        {
+          "bin": 4,
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "n": 369,
+          "conf": 0.4519,
+          "acc": 0.4336,
+          "gap": 0.0183
+        },
+        {
+          "bin": 5,
+          "bin_lower": 0.5,
+          "bin_upper": 0.6000000000000001,
+          "n": 373,
+          "conf": 0.5519,
+          "acc": 0.5442,
+          "gap": 0.0076
+        },
+        {
+          "bin": 6,
+          "bin_lower": 0.6000000000000001,
+          "bin_upper": 0.7000000000000001,
+          "n": 389,
+          "conf": 0.6504,
+          "acc": 0.6581,
+          "gap": 0.0077
+        },
+        {
+          "bin": 7,
+          "bin_lower": 0.7000000000000001,
+          "bin_upper": 0.8,
+          "n": 367,
+          "conf": 0.7508,
+          "acc": 0.6975,
+          "gap": 0.0532
+        },
+        {
+          "bin": 8,
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "n": 359,
+          "conf": 0.8505,
+          "acc": 0.7716,
+          "gap": 0.0789
+        },
+        {
+          "bin": 9,
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "n": 650,
+          "conf": 0.961,
+          "acc": 0.8292,
+          "gap": 0.1318
+        }
+      ],
+      "overconfidence": {
+        "mean_confidence": 0.5539,
+        "mean_accuracy": 0.5121,
+        "overconfidence": 0.0418,
+        "max_overconfidence": 0.999,
+        "mean_overconfidence": 0.0418
+      },
+      "platt_scaling": {
+        "original_brier": 0.184741,
+        "original_ece": 0.049939,
+        "platt_brier": 0.184137,
+        "platt_ece": 0.052746,
+        "brier_improvement_pct": 0.33,
+        "ece_improvement_pct": -5.62,
+        "platt_calibrated_bins": [
+          {
+            "bin": 0,
+            "bin_lower": 0.0,
+            "bin_upper": 0.1,
+            "n": 182,
+            "conf": 0.0572,
+            "acc": 0.0275,
+            "gap": 0.0297
+          },
+          {
+            "bin": 1,
+            "bin_lower": 0.1,
+            "bin_upper": 0.2,
+            "n": 282,
+            "conf": 0.1527,
+            "acc": 0.1135,
+            "gap": 0.0392
+          },
+          {
+            "bin": 2,
+            "bin_lower": 0.2,
+            "bin_upper": 0.30000000000000004,
+            "n": 360,
+            "conf": 0.2534,
+            "acc": 0.1778,
+            "gap": 0.0756
+          },
+          {
+            "bin": 3,
+            "bin_lower": 0.30000000000000004,
+            "bin_upper": 0.4,
+            "n": 497,
+            "conf": 0.3518,
+            "acc": 0.3219,
+            "gap": 0.0298
+          },
+          {
+            "bin": 4,
+            "bin_lower": 0.4,
+            "bin_upper": 0.5,
+            "n": 546,
+            "conf": 0.4497,
+            "acc": 0.4927,
+            "gap": 0.043
+          },
+          {
+            "bin": 5,
+            "bin_lower": 0.5,
+            "bin_upper": 0.6000000000000001,
+            "n": 537,
+            "conf": 0.5491,
+            "acc": 0.6276,
+            "gap": 0.0785
+          },
+          {
+            "bin": 6,
+            "bin_lower": 0.6000000000000001,
+            "bin_upper": 0.7000000000000001,
+            "n": 412,
+            "conf": 0.6476,
+            "acc": 0.7112,
+            "gap": 0.0635
+          },
+          {
+            "bin": 7,
+            "bin_lower": 0.7000000000000001,
+            "bin_upper": 0.8,
+            "n": 337,
+            "conf": 0.7459,
+            "acc": 0.7685,
+            "gap": 0.0226
+          },
+          {
+            "bin": 8,
+            "bin_lower": 0.8,
+            "bin_upper": 0.9,
+            "n": 327,
+            "conf": 0.8515,
+            "acc": 0.7982,
+            "gap": 0.0534
+          },
+          {
+            "bin": 9,
+            "bin_lower": 0.9,
+            "bin_upper": 1.0,
+            "n": 287,
+            "conf": 0.9488,
+            "acc": 0.8676,
+            "gap": 0.0812
+          }
+        ]
+      },
+      "verdicts": {
+        "calibration": "CALIBRATED",
+        "bias": "WELL_CALIBRATED",
+        "fixable_by_platt": false
+      }
+    },
+    "SOL": {
+      "symbol": "SOL",
+      "n_predictions": 4057,
+      "class_balance": {
+        "buy_pct": 0.5016,
+        "sell_pct": 0.4984
+      },
+      "brier_score": 0.184531,
+      "ece": 0.037867,
+      "ece_bins": [
+        {
+          "bin": 0,
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "n": 423,
+          "conf": 0.0463,
+          "acc": 0.104,
+          "gap": 0.0577
+        },
+        {
+          "bin": 1,
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "n": 338,
+          "conf": 0.1522,
+          "acc": 0.1893,
+          "gap": 0.0371
+        },
+        {
+          "bin": 2,
+          "bin_lower": 0.2,
+          "bin_upper": 0.30000000000000004,
+          "n": 378,
+          "conf": 0.2498,
+          "acc": 0.2381,
+          "gap": 0.0117
+        },
+        {
+          "bin": 3,
+          "bin_lower": 0.30000000000000004,
+          "bin_upper": 0.4,
+          "n": 376,
+          "conf": 0.352,
+          "acc": 0.2979,
+          "gap": 0.0542
+        },
+        {
+          "bin": 4,
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "n": 412,
+          "conf": 0.4522,
+          "acc": 0.4466,
+          "gap": 0.0056
+        },
+        {
+          "bin": 5,
+          "bin_lower": 0.5,
+          "bin_upper": 0.6000000000000001,
+          "n": 419,
+          "conf": 0.5468,
+          "acc": 0.5632,
+          "gap": 0.0164
+        },
+        {
+          "bin": 6,
+          "bin_lower": 0.6000000000000001,
+          "bin_upper": 0.7000000000000001,
+          "n": 428,
+          "conf": 0.651,
+          "acc": 0.6636,
+          "gap": 0.0126
+        },
+        {
+          "bin": 7,
+          "bin_lower": 0.7000000000000001,
+          "bin_upper": 0.8,
+          "n": 428,
+          "conf": 0.7493,
+          "acc": 0.7173,
+          "gap": 0.032
+        },
+        {
+          "bin": 8,
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "n": 370,
+          "conf": 0.8491,
+          "acc": 0.7811,
+          "gap": 0.068
+        },
+        {
+          "bin": 9,
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "n": 485,
+          "conf": 0.9555,
+          "acc": 0.8763,
+          "gap": 0.0793
+        }
+      ],
+      "overconfidence": {
+        "mean_confidence": 0.5152,
+        "mean_accuracy": 0.5016,
+        "overconfidence": 0.0136,
+        "max_overconfidence": 1.0,
+        "mean_overconfidence": 0.0136
+      },
+      "platt_scaling": {
+        "original_brier": 0.184531,
+        "original_ece": 0.037867,
+        "platt_brier": 0.185017,
+        "platt_ece": 0.041656,
+        "brier_improvement_pct": -0.26,
+        "ece_improvement_pct": -10.01,
+        "platt_calibrated_bins": [
+          {
+            "bin": 0,
+            "bin_lower": 0.0,
+            "bin_upper": 0.1,
+            "n": 207,
+            "conf": 0.055,
+            "acc": 0.1014,
+            "gap": 0.0464
+          },
+          {
+            "bin": 1,
+            "bin_lower": 0.1,
+            "bin_upper": 0.2,
+            "n": 308,
+            "conf": 0.1497,
+            "acc": 0.1494,
+            "gap": 0.0004
+          },
+          {
+            "bin": 2,
+            "bin_lower": 0.2,
+            "bin_upper": 0.30000000000000004,
+            "n": 410,
+            "conf": 0.2528,
+            "acc": 0.1829,
+            "gap": 0.0699
+          },
+          {
+            "bin": 3,
+            "bin_lower": 0.30000000000000004,
+            "bin_upper": 0.4,
+            "n": 498,
+            "conf": 0.3511,
+            "acc": 0.2751,
+            "gap": 0.076
+          },
+          {
+            "bin": 4,
+            "bin_lower": 0.4,
+            "bin_upper": 0.5,
+            "n": 602,
+            "conf": 0.4525,
+            "acc": 0.4385,
+            "gap": 0.0139
+          },
+          {
+            "bin": 5,
+            "bin_lower": 0.5,
+            "bin_upper": 0.6000000000000001,
+            "n": 574,
+            "conf": 0.5493,
+            "acc": 0.608,
+            "gap": 0.0587
+          },
+          {
+            "bin": 6,
+            "bin_lower": 0.6000000000000001,
+            "bin_upper": 0.7000000000000001,
+            "n": 535,
+            "conf": 0.6477,
+            "acc": 0.7009,
+            "gap": 0.0533
+          },
+          {
+            "bin": 7,
+            "bin_lower": 0.7000000000000001,
+            "bin_upper": 0.8,
+            "n": 393,
+            "conf": 0.7462,
+            "acc": 0.7786,
+            "gap": 0.0324
+          },
+          {
+            "bin": 8,
+            "bin_lower": 0.8,
+            "bin_upper": 0.9,
+            "n": 316,
+            "conf": 0.8504,
+            "acc": 0.8449,
+            "gap": 0.0055
+          },
+          {
+            "bin": 9,
+            "bin_lower": 0.9,
+            "bin_upper": 1.0,
+            "n": 214,
+            "conf": 0.9473,
+            "acc": 0.9112,
+            "gap": 0.0361
+          }
+        ]
+      },
+      "verdicts": {
+        "calibration": "CALIBRATED",
+        "bias": "WELL_CALIBRATED",
+        "fixable_by_platt": false
+      }
+    }
+  },
+  "pooled": {
+    "symbol": "POOLED",
+    "n_predictions": 11501,
+    "brier_score": 0.18483,
+    "ece": 0.039092,
+    "ece_bins": [
+      {
+        "bin": 0,
+        "bin_lower": 0.0,
+        "bin_upper": 0.1,
+        "n": 1166,
+        "conf": 0.0448,
+        "acc": 0.0986,
+        "gap": 0.0538
+      },
+      {
+        "bin": 1,
+        "bin_lower": 0.1,
+        "bin_upper": 0.2,
+        "n": 922,
+        "conf": 0.1497,
+        "acc": 0.1844,
+        "gap": 0.0347
+      },
+      {
+        "bin": 2,
+        "bin_lower": 0.2,
+        "bin_upper": 0.30000000000000004,
+        "n": 1000,
+        "conf": 0.2506,
+        "acc": 0.218,
+        "gap": 0.0326
+      },
+      {
+        "bin": 3,
+        "bin_lower": 0.30000000000000004,
+        "bin_upper": 0.4,
+        "n": 1057,
+        "conf": 0.3503,
+        "acc": 0.316,
+        "gap": 0.0343
+      },
+      {
+        "bin": 4,
+        "bin_lower": 0.4,
+        "bin_upper": 0.5,
+        "n": 1116,
+        "conf": 0.4524,
+        "acc": 0.448,
+        "gap": 0.0044
+      },
+      {
+        "bin": 5,
+        "bin_lower": 0.5,
+        "bin_upper": 0.6000000000000001,
+        "n": 1182,
+        "conf": 0.5494,
+        "acc": 0.5533,
+        "gap": 0.0039
+      },
+      {
+        "bin": 6,
+        "bin_lower": 0.6000000000000001,
+        "bin_upper": 0.7000000000000001,
+        "n": 1199,
+        "conf": 0.6505,
+        "acc": 0.6489,
+        "gap": 0.0017
+      },
+      {
+        "bin": 7,
+        "bin_lower": 0.7000000000000001,
+        "bin_upper": 0.8,
+        "n": 1141,
+        "conf": 0.7505,
+        "acc": 0.7292,
+        "gap": 0.0213
+      },
+      {
+        "bin": 8,
+        "bin_lower": 0.8,
+        "bin_upper": 0.9,
+        "n": 1085,
+        "conf": 0.8497,
+        "acc": 0.7862,
+        "gap": 0.0635
+      },
+      {
+        "bin": 9,
+        "bin_lower": 0.9,
+        "bin_upper": 1.0,
+        "n": 1633,
+        "conf": 0.9592,
+        "acc": 0.8481,
+        "gap": 0.1111
+      }
+    ],
+    "overconfidence": {
+      "mean_confidence": 0.5295,
+      "mean_accuracy": 0.5077,
+      "overconfidence": 0.0218,
+      "max_overconfidence": 1.0,
+      "mean_overconfidence": 0.0218
+    },
+    "platt_scaling": {
+      "original_brier": 0.18483,
+      "original_ece": 0.039092,
+      "platt_brier": 0.184836,
+      "platt_ece": 0.045445,
+      "brier_improvement_pct": -0.0,
+      "ece_improvement_pct": -16.25,
+      "platt_calibrated_bins": [
+        {
+          "bin": 0,
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "n": 592,
+          "conf": 0.0542,
+          "acc": 0.0811,
+          "gap": 0.0269
+        },
+        {
+          "bin": 1,
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "n": 857,
+          "conf": 0.1525,
+          "acc": 0.1377,
+          "gap": 0.0148
+        },
+        {
+          "bin": 2,
+          "bin_lower": 0.2,
+          "bin_upper": 0.30000000000000004,
+          "n": 1109,
+          "conf": 0.2532,
+          "acc": 0.1894,
+          "gap": 0.0638
+        },
+        {
+          "bin": 3,
+          "bin_lower": 0.30000000000000004,
+          "bin_upper": 0.4,
+          "n": 1428,
+          "conf": 0.3514,
+          "acc": 0.2829,
+          "gap": 0.0685
+        },
+        {
+          "bin": 4,
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "n": 1662,
+          "conf": 0.4514,
+          "acc": 0.4585,
+          "gap": 0.0071
+        },
+        {
+          "bin": 5,
+          "bin_lower": 0.5,
+          "bin_upper": 0.6000000000000001,
+          "n": 1671,
+          "conf": 0.549,
+          "acc": 0.6008,
+          "gap": 0.0519
+        },
+        {
+          "bin": 6,
+          "bin_lower": 0.6000000000000001,
+          "bin_upper": 0.7000000000000001,
+          "n": 1447,
+          "conf": 0.648,
+          "acc": 0.7201,
+          "gap": 0.0721
+        },
+        {
+          "bin": 7,
+          "bin_lower": 0.7000000000000001,
+          "bin_upper": 0.8,
+          "n": 1080,
+          "conf": 0.7475,
+          "acc": 0.787,
+          "gap": 0.0396
+        },
+        {
+          "bin": 8,
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "n": 891,
+          "conf": 0.8505,
+          "acc": 0.8159,
+          "gap": 0.0346
+        },
+        {
+          "bin": 9,
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "n": 764,
+          "conf": 0.9465,
+          "acc": 0.8822,
+          "gap": 0.0643
+        }
+      ]
+    }
+  }
+}

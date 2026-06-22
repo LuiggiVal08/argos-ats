@@ -1,0 +1,17 @@
+{
+  "stream": "market:candles",
+  "description": "Candle published by data-engine after a timeframe window closes",
+  "version": 1,
+  "fields": {
+    "symbol":       { "type": "string", "required": true, "pattern": "^[A-Z0-9]+/[A-Z0-9]+$", "description": "Trading pair, e.g. BTC/USDT" },
+    "timeframe":    { "type": "string", "required": true, "enum": ["1m", "5m", "15m", "1h", "4h", "1d"], "description": "Candle period" },
+    "open":         { "type": "string", "required": true, "pattern": "^\\d+\\.?\\d*$", "description": "Open price as decimal string" },
+    "high":         { "type": "string", "required": true, "pattern": "^\\d+\\.?\\d*$", "description": "High price as decimal string" },
+    "low":          { "type": "string", "required": true, "pattern": "^\\d+\\.?\\d*$", "description": "Low price as decimal string" },
+    "close":        { "type": "string", "required": true, "pattern": "^\\d+\\.?\\d*$", "description": "Close price as decimal string" },
+    "volume":       { "type": "string", "required": true, "pattern": "^\\d+\\.?\\d*$", "description": "Volume as decimal string" },
+    "timestamp":    { "type": "integer", "required": true, "min": 0, "description": "Candle close timestamp in ms UTC" },
+    "is_complete":  { "type": "boolean", "required": false, "default": true, "description": "False for in-progress candle" },
+    "schema_version": { "type": "integer", "required": true, "const": 1 }
+  }
+}

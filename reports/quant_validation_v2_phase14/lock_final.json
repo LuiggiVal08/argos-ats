@@ -1,0 +1,108 @@
+{
+  "cutoff_date": "2025-06-01",
+  "model_params": {
+    "C": 0.1,
+    "class_weight": "balanced",
+    "max_iter": 5000,
+    "random_state": 42,
+    "solver": "liblinear"
+  },
+  "feature_count": 53,
+  "per_symbol": [
+    {
+      "symbol": "BTC",
+      "metrics": {
+        "n_predictions": 9122,
+        "n_directional": 4889,
+        "n_hold": 4233,
+        "directional_accuracy": 0.753324,
+        "overall_accuracy": 0.403749,
+        "precision": 0.752832,
+        "recall": 0.757736,
+        "f1": 0.755276,
+        "specificity": 0.74887,
+        "tp": 1861,
+        "fp": 611,
+        "tn": 1822,
+        "fn": 595,
+        "backtest_final_balance": 676978.41,
+        "backtest_return": 5.769784,
+        "backtest_win_rate": 0.453,
+        "backtest_profit_factor": 1.2362,
+        "backtest_n_trades": 9122,
+        "backtest_n_wins": 4132,
+        "phase5_comparison": {
+          "accuracy": 0.764344,
+          "f1": 0.773176,
+          "n_predictions": 976
+        }
+      }
+    },
+    {
+      "symbol": "ETH",
+      "metrics": {
+        "n_predictions": 9144,
+        "n_directional": 4789,
+        "n_hold": 4355,
+        "directional_accuracy": 0.533305,
+        "overall_accuracy": 0.279309,
+        "precision": 0.522122,
+        "recall": 0.995903,
+        "f1": 0.685078,
+        "specificity": 0.052385,
+        "tp": 2431,
+        "fp": 2225,
+        "tn": 123,
+        "fn": 10,
+        "backtest_final_balance": 112.54,
+        "backtest_return": -0.998875,
+        "backtest_win_rate": 0.3856,
+        "backtest_profit_factor": 0.7715,
+        "backtest_n_trades": 9144,
+        "backtest_n_wins": 3526,
+        "phase5_comparison": {
+          "accuracy": 0.785789,
+          "f1": 0.7923,
+          "n_predictions": 957
+        }
+      }
+    },
+    {
+      "symbol": "SOL",
+      "metrics": {
+        "n_predictions": 9144,
+        "n_directional": 5117,
+        "n_hold": 4027,
+        "directional_accuracy": 0.502834,
+        "overall_accuracy": 0.281387,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "specificity": 1.0,
+        "tp": 0,
+        "fp": 0,
+        "tn": 2573,
+        "fn": 2544,
+        "backtest_final_balance": 16.39,
+        "backtest_return": -0.999836,
+        "backtest_win_rate": 0.3942,
+        "backtest_profit_factor": 0.5704,
+        "backtest_n_trades": 9144,
+        "backtest_n_wins": 3605,
+        "phase5_comparison": {
+          "accuracy": 0.779612,
+          "f1": 0.781521,
+          "n_predictions": 1030
+        }
+      }
+    }
+  ],
+  "global": {
+    "mean_directional_accuracy": 0.596488,
+    "mean_f1": 0.480118,
+    "directional_accuracy_std": 0.111596,
+    "vs_phase5_mean_accuracy": 0.776582,
+    "accuracy_degradation_vs_phase5": -0.180094
+  },
+  "elapsed_seconds": 204.5
+}

@@ -1,0 +1,69 @@
+{
+  "experiment": "QV2_Phase35",
+  "verdict": "H1_SURVIVES",
+  "symbol": "BTC/USDT",
+  "timeframe": "1h",
+  "features": {
+    "total": 53,
+    "base_ta": 20,
+    "mtf_4h": 15,
+    "mtf_1d": 15,
+    "funding": 3
+  },
+  "primary": {
+    "lookahead": 5,
+    "stride": 5,
+    "embargo": 1,
+    "n_samples": 7808
+  },
+  "gates": {
+    "Binary F1 > 0.60": {
+      "passed": true,
+      "value": 0.7435941859895395
+    },
+    "Binary AUC > 0.70": {
+      "passed": true,
+      "value": 0.8260058918370141
+    },
+    "Regression R\u00b2 > 0.05": {
+      "passed": true,
+      "value": 0.30814361419706104
+    },
+    "All shuffle deltas > 0": {
+      "passed": true,
+      "value": 0.23923066413593908
+    },
+    "At least 2/3 framings maintain advantage": {
+      "passed": true,
+      "value": null
+    }
+  },
+  "all_gates_passed": true,
+  "results": {
+    "multiclass_f1": 0.5181,
+    "binary_f1": 0.7436,
+    "binary_auc": 0.826,
+    "regression_r2": 0.3081,
+    "multiclass_shuffle_delta": 0.2392,
+    "binary_shuffle_delta": 0.2904,
+    "regression_shuffle_delta": 0.4151
+  },
+  "comparison_vs_qv2": {
+    "multiclass_f1": {
+      "qv2": 0.5331,
+      "p35": 0.5181,
+      "delta": -0.0149
+    },
+    "binary_f1": {
+      "qv2": 0.7685,
+      "p35": 0.7436,
+      "delta": -0.0249
+    },
+    "regression_r2": {
+      "qv2": 0.3063,
+      "p35": 0.3081,
+      "delta": 0.0019
+    }
+  },
+  "verdict_text": "H1 SURVIVES \u2014 La se\u00f1al observada en QV2 sobrevive a la eliminaci\u00f3n de labels traslapados.\n\nInterpretaci\u00f3n t\u00e9cnica:\n  - Al eliminar el solapamiento temporal (stride=5, embargo=1), los modelos mantienen\n    rendimiento por encima de baselines ingenua y aleatoria.\n  - La informaci\u00f3n proviene del feature space (53 features: TA+MTF+funding) y no\n    principalmente de la autocorrelaci\u00f3n artificial de labels.\n  - Binary F1 > 0.60 y AUC > 0.70 confirman direcci\u00f3n explotable.\n  - Shuffle deltas positivos en los 3 framings descartan sobreajuste temporal.\n\nPr\u00f3ximo paso: cross-market validation (ETH, SOL, NASDAQ futures)."
+}
