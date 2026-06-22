@@ -1,0 +1,98 @@
+{
+  "symbol": "BTC/USDT",
+  "version": "v1.0.1781547224",
+  "meta_accuracy": 0.5169479439030188,
+  "n_predictions": 28032,
+  "timestamp": "2026-06-15T21:43:14.055495+00:00",
+  "checks": {
+    "class_distribution": {
+      "status": "PASS",
+      "counts": {
+        "BUY": 6917,
+        "SELL": 7286,
+        "HOLD": 13829
+      },
+      "percentages": {
+        "BUY": 0.2468,
+        "SELL": 0.2599,
+        "HOLD": 0.4933
+      }
+    },
+    "confusion_matrix": {
+      "status": "WARNING",
+      "matrix": [
+        [
+          156,
+          852,
+          5909
+        ],
+        [
+          113,
+          1219,
+          5954
+        ],
+        [
+          91,
+          381,
+          13357
+        ]
+      ],
+      "labels": [
+        "BUY",
+        "SELL",
+        "HOLD"
+      ],
+      "precision": {
+        "BUY": 0.4333,
+        "SELL": 0.4971,
+        "HOLD": 0.5296
+      },
+      "recall": {
+        "BUY": 0.0226,
+        "SELL": 0.1673,
+        "HOLD": 0.9659
+      },
+      "f1": {
+        "BUY": 0.043,
+        "SELL": 0.2503,
+        "HOLD": 0.6841
+      },
+      "accuracy": 0.5255,
+      "avg_f1": 0.3258
+    },
+    "probability_stats": {
+      "status": "PASS",
+      "mean_probs": [
+        0.2218,
+        0.2658,
+        0.5124
+      ],
+      "std_probs": [
+        0.0621,
+        0.0697,
+        0.1219
+      ]
+    },
+    "confidence": {
+      "mean": 0.5194,
+      "std": 0.1114,
+      "p95": 0.7194
+    },
+    "accuracy_by_confidence": {
+      "regimes": {
+        "LOW_CONFIDENCE": {
+          "count": 4664,
+          "accuracy": 0.3722
+        },
+        "MID_CONFIDENCE": {
+          "count": 16343,
+          "accuracy": 0.4712
+        },
+        "HIGH_CONFIDENCE": {
+          "count": 7025,
+          "accuracy": 0.7537
+        }
+      }
+    }
+  }
+}

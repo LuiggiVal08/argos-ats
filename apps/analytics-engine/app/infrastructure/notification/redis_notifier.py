@@ -48,7 +48,7 @@ class RedisNotifier(Notifier):
             try:
                 await self._client.aclose()
             except Exception:
-                pass
+                log.warning("redis_close_failed", exc_info=True)
 
 
 from typing import Any

@@ -59,3 +59,5 @@ class OrderResult:
     avg_price: Decimal | None = None
     status: OrderStatus = OrderStatus.NEW
     client_order_id: str = ""
+    sl_order_id: str | None = None
+    tp_order_id: str | None = None

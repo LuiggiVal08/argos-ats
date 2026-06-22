@@ -4,20 +4,23 @@ Convierte OHLCV crudo en ventanas normalizadas con features
 tecnicas listas para la red LSTM.
 
 Pipeline completo:
-   1. build_features:  calcula 19 features (OHLCV + 14 indicadores técnicos)
+   1. build_features:  calcula features base + opcionalmente MTF
    2. normalize:       z-score con medias/std dadas o calculadas
    3. create_windows:  sliding window de tamano lookback
    4. create_targets:  etiquetas BUY/SELL/HOLD segun return forward
 
 Stack: pandas, numpy, ta (Technical Analysis Library).
 
-Las 19 features coinciden con el dataset generado por infrastructure/data/features.py
-y el orden en que se entrenó el modelo LSTM en Colab:
+Las 20 features base coinciden con el dataset original de Colab:
   open, high, low, close, volume,
   rsi, ema_fast, ema_medium, ema_slow,
   macd, macd_signal, macd_hist,
   bb_upper, bb_middle, bb_lower,
-  atr, obv, volume_sma, pct_change
+  atr, adx, obv, volume_sma, pct_change
+
+Cuando ModelConfig.features incluye nombres adicionales (ej. htf_rsi_4h),
+build_features computa automaticamente indicadores multi-timeframe y los
+apendiza al tensor, manteniendo el orden exacto de config.features.
 """
 from __future__ import annotations
 
@@ -32,6 +35,7 @@ from ...application.ports.data_preprocessor import (
     InsufficientDataError,
     PreprocessingError,
 )
+from ...domain.entities.multi_timeframe_aligner import MultiTimeframeAligner
 from ...domain.value_objects.model_config import ModelConfig
 from ...domain.value_objects.scaler_type import ScalerType
 
@@ -42,7 +46,7 @@ class TaDataPreprocessor:
     Implementa el port DataPreprocessor.
     """
 
-    # 20 features en orden estricto del tensor (coincide con dataset de Colab)
+    # 20 features base en orden estricto del tensor (coincide con dataset de Colab)
     FEATURE_NAMES: tuple[str, ...] = (
         "open", "high", "low", "close", "volume",
         "rsi", "ema_fast", "ema_medium", "ema_slow",
@@ -58,20 +62,23 @@ class TaDataPreprocessor:
     ) -> np.ndarray:
         """Calcula todas las features desde OHLCV.
 
-        Retorna 19 columnas en el orden exacto de FEATURE_NAMES:
-          - 5 raw OHLCV (passthrough)
-          - 14 indicadores técnicos
+        Siempre computa las 20 features base. Si config.features incluye
+        nombres adicionales (ej. htf_rsi_4h), computa indicadores MTF
+        y los apendiza manteniendo el orden exacto de config.features.
 
         Args:
             ohlcv: lista de dicts con keys timestamp, open, high, low, close, volume.
-            config: config del modelo (features list, etc.).
+            config: config del modelo (dicta que features calcular).
 
         Returns:
-            Array (n_velas, 19).
+            Array (n_velas, n_features) donde n_features = len(config.features).
         """
         try:
             df = pd.DataFrame(ohlcv)
             df = _ensure_numeric(df)
+            # Remove duplicate timestamps (keep last)
+            if "timestamp" in df.columns:
+                df = df.drop_duplicates(subset=["timestamp"], keep="last")
 
             close = df["close"]
             high = df["high"]
@@ -130,12 +137,48 @@ class TaDataPreprocessor:
             # ── 20: Price change % ───────────────────────────────────
             features.append(close.pct_change() * 100.0)
 
-            # Combinar y nombrar columnas
+            # Combinar base features
+            base_count = len(self.FEATURE_NAMES)
             result = pd.concat(features, axis=1)
             result.columns = self.FEATURE_NAMES
 
+            # ── MTF features (si config.features las pide) ───────────
+            if len(config.features) > base_count:
+                extra_names = config.features[base_count:]
+                mtf_df = MultiTimeframeAligner.compute(ohlcv)
+                available_mtf = [c for c in extra_names if c in mtf_df.columns]
+                if available_mtf:
+                    mtf_values = mtf_df[available_mtf].values
+                    mtf_cols = pd.DataFrame(
+                        mtf_values, index=result.index, columns=available_mtf
+                    )
+                    result = pd.concat([result, mtf_cols], axis=1)
+
             # Rellenar NaN (primeros valores donde los indicadores no tienen historia)
-            result = result.bfill().ffill()
+            result = result.bfill().ffill().fillna(0.0)
+
+            # Validar que el array tenga las columnas esperadas
+            expected_cols = list(config.features)
+            missing = [c for c in expected_cols if c not in result.columns]
+
+            allowed_missing = {
+                "funding_rate",
+                "funding_momentum",
+                "funding_change",
+            }
+
+            unexpected = set(missing) - allowed_missing
+            if unexpected:
+                raise ValueError(
+                    f"Unexpected missing features: {unexpected}"
+                )
+
+            for col in allowed_missing:
+                if col not in result.columns:
+                    result[col] = 0.0
+
+            if list(result.columns) != expected_cols:
+                result = result[expected_cols]
 
             return result.values.astype(np.float64)
 

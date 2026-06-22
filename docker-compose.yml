@@ -1,4 +1,4 @@
-# Argos bot - production-grade trading bot stack
+# Argos ATS - production-grade Automated Trading System stack
 # Spec: spec.md sections 1 and 4 (OWASP 4-phase incident response)
 #
 # Broker is pluggable. Default uses redis:7-alpine. To use another
@@ -8,14 +8,16 @@
 # and is broker-agnostic.
 services:
     data-engine:
-        build: ./apps/data-engine
+        build:
+            context: .
+            dockerfile: apps/data-engine/Dockerfile
         container_name: argos-data-engine
         ports:
             - '3000:3000'
         environment:
             - ENVIRONMENT_MODE=${ENVIRONMENT_MODE:-PAPER_TRADING}
             - ARGOS_BROKER_URL=redis://broker:6379
-            - EXCHANGE_WS_URL=${EXCHANGE_WS_URL:-wss://stream.binance.com:9443/ws}
+            - EXCHANGE_WS_URL=${EXCHANGE_WS_URL:-}
             - SYMBOL=${SYMBOL:-BTC/USDT}
             - STREAM_PREFIX=${STREAM_PREFIX:-ticks:}
         env_file:
@@ -26,6 +28,7 @@ services:
         dns:
             - 8.8.8.8
             - 1.1.1.1
+
         networks: [argos-net]
         restart: unless-stopped
         healthcheck:
@@ -39,7 +42,9 @@ services:
             options: { max-size: '10m', max-file: '3' }
 
     analytics-engine:
-        build: ./apps/analytics-engine
+        build:
+            context: .
+            dockerfile: apps/analytics-engine/Dockerfile
         container_name: argos-analytics-engine
         ports:
             - '8000:8000'
@@ -52,6 +57,13 @@ services:
             - DRAWDOWN_PCT=${DRAWDOWN_PCT:-0.05}
         env_file:
             - .env
+        volumes:
+            - ./apps/analytics-engine/app:/app/app
+            - ./contracts:/app/contracts
+            - ./models:/app/models:ro
+        dns:
+            - 8.8.8.8
+            - 1.1.1.1
         depends_on:
             broker:
                 condition: service_healthy

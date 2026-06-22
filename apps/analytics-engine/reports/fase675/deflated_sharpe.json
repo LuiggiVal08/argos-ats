@@ -1,0 +1,59 @@
+{
+  "champion_avg_sharpe": 5.991197598018791,
+  "champion_sharpe_std": 2.533115683494365,
+  "trade_count": 5467,
+  "skewness": 0.0,
+  "kurtosis": 3.0,
+  "dsr_results": {
+    "M=20": {
+      "sharpe": 5.991197598018791,
+      "num_trials_M": 20,
+      "num_observations_T": 5467,
+      "dsr": 1.0,
+      "dsr_statistic": 7521.435534462787,
+      "expected_max_sr": 0.11190600099777859,
+      "se_sr": 0.05887595773368254,
+      "var_sr": 0.0034663783990583727,
+      "skewness": 0.0,
+      "kurtosis": 3.0
+    },
+    "M=60": {
+      "sharpe": 5.991197598018791,
+      "num_trials_M": 60,
+      "num_observations_T": 5467,
+      "dsr": 1.0,
+      "dsr_statistic": 7520.990904714201,
+      "expected_max_sr": 0.1380840032826605,
+      "se_sr": 0.05887595773368254,
+      "var_sr": 0.0034663783990583727,
+      "skewness": 0.0,
+      "kurtosis": 3.0
+    },
+    "M=80": {
+      "sharpe": 5.991197598018791,
+      "num_trials_M": 80,
+      "num_observations_T": 5467,
+      "dsr": 1.0,
+      "dsr_statistic": 7520.8851713394415,
+      "expected_max_sr": 0.14430915698600522,
+      "se_sr": 0.05887595773368254,
+      "var_sr": 0.0034663783990583727,
+      "skewness": 0.0,
+      "kurtosis": 3.0
+    },
+    "M=200": {
+      "sharpe": 5.991197598018791,
+      "num_trials_M": 200,
+      "num_observations_T": 5467,
+      "dsr": 1.0,
+      "dsr_statistic": 7520.570718509334,
+      "expected_max_sr": 0.16282286852066377,
+      "se_sr": 0.05887595773368254,
+      "var_sr": 0.0034663783990583727,
+      "skewness": 0.0,
+      "kurtosis": 3.0
+    }
+  },
+  "primary_M": 60,
+  "verdict": "positive"
+}

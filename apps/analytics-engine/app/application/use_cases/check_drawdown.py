@@ -86,6 +86,26 @@ class CheckDrawdownUseCase:
         except DrawdownSnapshotRepoError as e:
             raise CheckDrawdownError(f"snapshot_unavailable: {e}") from e
 
+    async def is_halted(self) -> bool:
+        """Check whether the circuit breaker would trip right now.
+
+        Non-destructive — does NOT trigger a trip or dispatch any
+        action. Used by health checks and position monitor loops."""
+        try:
+            snapshot = await self._snapshots.load()
+            if snapshot is None:
+                return False
+            intraday_pnl = await self._journal.realized_pnl_since(snapshot.taken_at)
+            fresh = DrawdownSnapshot(
+                starting_balance=snapshot.starting_balance,
+                current_balance=snapshot.starting_balance + intraday_pnl,
+                taken_at=datetime.now(tz=timezone.utc),
+            )
+            state = self._cb.evaluate(fresh)
+            return state in (DrawdownState.TRIP, DrawdownState.HALTED)
+        except Exception:
+            return False
+
     async def execute(
         self, current_state: DrawdownState | None = None
     ) -> CheckDrawdownResult:

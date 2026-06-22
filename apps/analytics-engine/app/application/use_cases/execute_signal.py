@@ -31,6 +31,7 @@ from ...domain.value_objects.execution_report import ExecutionReport
 from ...domain.value_objects.execution_signal import ExecutionSignal
 from ...domain.value_objects.live_position import LivePosition
 from ...domain.value_objects.order import CompositeOrder, OrderSide
+from ...domain.value_objects.symbol import Symbol
 from ..ports.atr_calculator import AtrCalculator
 from ..ports.balance_provider import BalanceProvider
 from ..ports.execution_idempotency import ExecutionIdempotencyStore
@@ -143,7 +144,8 @@ class ExecuteSignalUseCase:
 
         # 3. Balance + ATR
         try:
-            balance = await self._balance_provider.get_free_balance(signal.symbol)
+            quote_currency = Symbol(signal.symbol).quote_currency
+            balance = await self._balance_provider.get_free_balance(quote_currency)
             atr_value = await self._atr_calculator.get_atr(signal.symbol)
             atr = atr_value.value
         except Exception as e:

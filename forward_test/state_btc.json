@@ -1,0 +1,15 @@
+{
+  "symbol": "BTC",
+  "last_bar_idx": 999,
+  "last_timestamp": "2026-06-18 21:00:00",
+  "in_position": true,
+  "position_side": 1,
+  "entry_bar": 993,
+  "entry_price": 62337.8,
+  "position_size": 42491.81050210602,
+  "entry_cost": 65.86230627826433,
+  "free_balance": 86205.3893192097,
+  "total_trades": 134,
+  "total_costs": 15334.66787155038,
+  "peak_equity": 127466.66300023897
+}
