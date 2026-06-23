@@ -1,5 +1,6 @@
 """Domain value objects."""
 from .atr import Atr, InvalidAtrError
+from .symbol import InvalidSymbolError, Symbol
 from .backtest_config import BacktestConfig
 from .backtest_metrics import BacktestMetrics
 from .backtest_trade import BacktestTrade
@@ -35,6 +36,8 @@ from .validation_metrics import (
 __all__ = [
     "Atr",
     "InvalidAtrError",
+    "InvalidSymbolError",
+    "Symbol",
     "BacktestConfig",
     "BacktestMetrics",
     "BacktestTrade",

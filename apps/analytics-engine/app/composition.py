@@ -270,6 +270,10 @@ def _build_exchange() -> ccxt.Exchange:
             "apiKey": api_key,
             "secret": api_secret,
             "enableRateLimit": True,
+            "recvWindow": 10000,
+            "options": {
+                "adjustForTimeDifference": True,
+            },
         })
         ex.enable_demo_trading(True)
         return ex
@@ -280,6 +284,10 @@ def _build_exchange() -> ccxt.Exchange:
         "apiKey": api_key,
         "secret": api_secret,
         "enableRateLimit": True,
+        "recvWindow": 10000,
+        "options": {
+            "adjustForTimeDifference": True,
+        },
     })
 
 
