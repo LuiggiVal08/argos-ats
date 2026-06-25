@@ -567,6 +567,16 @@ class MockSnapshotRepo:
     async def save_recovery_state(self, state: str, error: str = ""):
         self.saved_states.append(state)
 
+    async def load_recovery_state(self):
+        if not self.saved_states:
+            return None
+        latest = self.saved_states[-1]
+        return RecoveryStateRecord(
+            state=latest,
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc) if latest in (RecoveryState.COMPLETED, RecoveryState.FAILED) else None,
+        )
+
 
 class TestRecoveryEngine:
     @pytest.mark.asyncio
@@ -623,6 +633,9 @@ class TestRecoveryEngine:
 
             async def save_recovery_state(self, state: str, error: str = ""):
                 pass
+
+            async def load_recovery_state(self):
+                return None
 
         engine = RecoveryEngine(
             position_repo=MockPositionRepo(),

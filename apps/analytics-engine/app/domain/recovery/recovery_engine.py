@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 from ...application.ports.position_repository import PositionRepository
 from ...application.ports.exchange_position_provider import (
@@ -41,6 +42,8 @@ from ...application.ports.snapshot_repository import (
     SystemSnapshot,
 )
 from ...domain.value_objects.event_id import uuid7
+from ...domain.value_objects.live_position import LivePosition
+from ...domain.value_objects.order import OrderSide
 from .reconciliation_engine import (
     ReconciliationEngine,
     ReconciliationStatus,
@@ -217,10 +220,37 @@ class RecoveryEngine:
                         )
 
                 elif result.status == ReconciliationStatus.MISSING_LOCAL:
-                    actions.append(
-                        f"reconstruct_position {result.symbol} — "
-                        f"{result.exchange_units} units at {result.exchange_entry}"
-                    )
+                    if result.exchange_units > 0:
+                        try:
+                            ex_side = OrderSide.BUY if result.side == "long" else OrderSide.SELL
+                            reconstructed = LivePosition(
+                                position_id=uuid4().hex[:12],
+                                symbol=result.symbol,
+                                side=ex_side,
+                                units=abs(result.exchange_units),
+                                entry_price=abs(result.exchange_entry),
+                                current_price=abs(result.exchange_entry),
+                                sl_price=None,
+                                tp_price=None,
+                                status="OPEN",
+                                opened_at=datetime.now(timezone.utc),
+                                metadata={"reconstructed": "true", "source": "recovery_missing_local"},
+                            )
+                            await self._position_repo.save(reconstructed)
+                            actions.append(
+                                f"reconstructed_position {reconstructed.position_id} "
+                                f"({result.symbol}): {result.exchange_units} units "
+                                f"at {result.exchange_entry}"
+                            )
+                        except Exception as e:
+                            errors.append(
+                                f"failed_to_reconstruct_position {result.symbol}: {e}"
+                            )
+                    else:
+                        actions.append(
+                            f"skipped_reconstruct_position {result.symbol} — "
+                            f"exchange_units={result.exchange_units} (closed position)"
+                        )
 
                 elif result.status == ReconciliationStatus.PARTIAL_MISMATCH:
                     try:
@@ -324,6 +354,21 @@ class RecoveryEngine:
                 await self._snapshot_repo.save_recovery_state(RecoveryState.COMPLETED)
             except SnapshotRepositoryError as e:
                 errors.append(f"recovery_state_write_failed_completed: {e}")
+
+        # Re-evaluate gate with completed recovery_state to
+        # clear stale boot-time warnings (e.g. no_recovery_state_record)
+        try:
+            updated_recovery_state = await self._snapshot_repo.load_recovery_state()
+            if updated_recovery_state is not None:
+                gate = self._gate.evaluate(
+                    snapshot=snapshot,
+                    db_accessible=db_accessible,
+                    reconciliation=reconciliation,
+                    recovery_state=updated_recovery_state,
+                    risk_validation=risk_validation,
+                )
+        except SnapshotRepositoryError as e:
+            errors.append(f"recovery_state_reload_failed: {e}")
 
         report = RecoveryReport(
             timestamp=datetime.now(timezone.utc),
