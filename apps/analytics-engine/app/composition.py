@@ -14,6 +14,7 @@ via the `get_*_usecase` helpers in this module.
 """
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from decimal import Decimal
@@ -57,7 +58,9 @@ from .application.ports.model_trainer import ModelTrainer
 from .application.ports.notifier import Notifier
 from .application.ports.incident_repository import IncidentRepository
 from .application.ports.position_repository import PositionRepository
+from .application.ports.event_store import EventStore, EventStoreError
 from .application.ports.execution_idempotency import ExecutionIdempotencyStore
+from .application.ports.algo_order_client import AlgoOrderClient
 from .application.use_cases.check_drawdown import CheckDrawdownUseCase
 from .application.use_cases.build_dataset import BuildDatasetUseCase
 from .application.use_cases.collect_telemetry import (
@@ -124,13 +127,16 @@ from .domain.entities.telemetry_engine import TelemetryEngine
 from .domain.entities.walk_forward_validator import WalkForwardValidator
 from .infrastructure.balance.ccxt_balance_provider import CcxtBalanceProvider
 from .infrastructure.balance.mock_balance_provider import MockBalanceProvider
+from .infrastructure.balance.virtual_balance_provider import VirtualBalanceProvider
 from .infrastructure.env_mode.file_env_mode_writer import (
     FileEnvironmentModeWriter,
 )
 from .infrastructure.exchange.ccxt_order_client import CcxtOrderClient
+from .infrastructure.exchange.binance_algo_adapter import BinanceAlgoAdapter
 from .infrastructure.trading.ccxt_binance_adapter import (
     CcxtBinanceTestnetAdapter,
 )
+from .infrastructure.trading.execution_authority import ExecutionAuthority
 from .domain.value_objects.atr import Atr
 from .infrastructure.indicators.ta_atr_calculator import TaAtrCalculator
 from .infrastructure.backtest.file_reporter import FileBacktestReporter
@@ -143,12 +149,15 @@ from .infrastructure.repositories.sqlite_position_repository import SQLitePositi
 from .infrastructure.repositories.trade_journal_repository import SQLiteTradeJournal
 from .infrastructure.repositories.snapshot_repository import SQLiteSnapshotRepository
 from .infrastructure.repositories.idempotency_store import SQLiteExecutionIdempotencyStore
+from .infrastructure.repositories.sqlite_event_store import SQLiteEventStore
 from .infrastructure.exchange.ccxt_position_provider import CcxtExchangePositionProvider
 from .domain.recovery.recovery_engine import RecoveryEngine, RecoveryReport, RecoveryError
 from .domain.recovery.recovery_gate import RecoveryGate, GateState
 from .domain.recovery.reconciliation_engine import ReconciliationEngine
 from .domain.recovery.stream_barrier import StreamConsumptionBarrier
+from .domain.recovery.market_continuity_guard import MarketContinuityGuard
 from .application.services.drift_watchdog import LiveDriftWatchdog
+from .application.services.order_cleanup_service import OrderCleanupService
 from .infrastructure.market.ccxt_min_lot_provider import CcxtMinLotProvider
 from .infrastructure.monitoring.in_memory_incident_repo import (
     InMemoryIncidentRepository,
@@ -220,15 +229,66 @@ class Composition:
     system_snapshot_repo: Any | None = None
     recovery_report: RecoveryReport | None = None
     recovery_blocked: bool = False
-    # Nuevo nivel de riesgo (Fixes 1-4)
+    disaster_recovery: DisasterRecovery | None = None
     stream_barrier: StreamConsumptionBarrier | None = None
     idempotency_store: ExecutionIdempotencyStore | None = None
-    # Fix 4: Live Drift Watchdog
     drift_watchdog: Any | None = None
+    event_store: EventStore | None = None
+    algo_client: AlgoOrderClient | None = None
+    order_cleanup_service: Any | None = None
+    execution_authority: Any | None = None
+    virtual_balance: Any | None = None
+    market_continuity_guard: Any = None
+
+
+def _find_config_json() -> Path | None:
+    """Locate config.json — the single source of truth.
+
+    Search order:
+      1. CWD (e.g. /app/config.json inside container)
+      2. Relative to this file (bare-metal layout:
+         apps/analytics-engine/app/composition.py → 4 levels up → root)
+    """
+    candidates = [
+        Path.cwd() / "config.json",
+        Path(__file__).resolve().parent.parent.parent.parent / "config.json",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
+
+def _read_config_mode() -> str | None:
+    """Read environment_mode from config.json (single source of truth)."""
+    cfg_path = _find_config_json()
+    if cfg_path is None:
+        return None
+    try:
+        cfg = json.loads(cfg_path.read_text())
+        raw = cfg.get("environment_mode")
+        if raw is not None:
+            return str(raw).upper().strip()
+    except (OSError, json.JSONDecodeError, KeyError):
+        pass
+    return None
 
 
 def _env_mode() -> str:
-    return os.environ.get("ENVIRONMENT_MODE", "PAPER_TRADING").upper()
+    """Resolve environment_mode — single source of truth is config.json.
+
+    Precedence:
+      1. ENVIRONMENT_MODE env var (explicit override for tests/emergencies)
+      2. config.json (environment_mode field — production default)
+      3. Hard default (PAPER_TRADING, safest fallback)
+    """
+    env_val = os.environ.get("ENVIRONMENT_MODE")
+    if env_val is not None and env_val.strip():
+        return env_val.strip().upper()
+    from_cfg = _read_config_mode()
+    if from_cfg is not None:
+        return from_cfg
+    return "PAPER_TRADING"
 
 
 def _is_testnet() -> bool:
@@ -243,6 +303,15 @@ def _build_order_client(exchange: ccxt.Exchange) -> ExchangeOrderClient:
     if _is_testnet():
         return CcxtBinanceTestnetAdapter(exchange=exchange)
     return CcxtOrderClient(exchange=exchange)
+
+
+def _build_algo_client(exchange: ccxt.Exchange | None) -> AlgoOrderClient | None:
+    """Return an AlgoOrderClient for conditional order operations.
+
+    Returns None in BACKTESTING mode (no exchange)."""
+    if exchange is None:
+        return None
+    return BinanceAlgoAdapter(exchange=exchange)
 
 
 def _build_exchange() -> ccxt.Exchange:
@@ -313,27 +382,40 @@ class _StaticMinLot(MinLotProvider):
         )
 
 
-def _build_h2(mode: str, exchange: ccxt.Exchange | None) -> ComputePositionSizeUseCase:
+def _balance_provider_for_mode(
+    mode: str, exchange: ccxt.Exchange | None, virtual: VirtualBalanceProvider | None = None
+) -> Any:
+    """Return the appropriate BalanceProvider for the given mode."""
+    if mode == "BACKTESTING":
+        return MockBalanceProvider(Decimal("10000"))
+    if mode == "PAPER_TRADING" and virtual is not None:
+        return virtual
+    if exchange is None:
+        raise RuntimeError("exchange is None in non-BACKTESTING mode")
+    return CcxtBalanceProvider(exchange)
+
+
+def _build_h2(
+    mode: str, exchange: ccxt.Exchange | None, virtual: VirtualBalanceProvider | None = None
+) -> ComputePositionSizeUseCase:
     risk_calculator = RiskCalculator()
     if mode == "BACKTESTING":
-        balance: Any = MockBalanceProvider(Decimal("10000"))
         atr_calc = TaAtrCalculator(source=_dummy_ohlcv_source)
         return ComputePositionSizeUseCase(
             risk_calculator=risk_calculator,
-            balance_provider=balance,
+            balance_provider=_balance_provider_for_mode(mode, exchange, virtual),
             atr_calculator=atr_calc,
             min_lot_provider=_StaticMinLot(),
         )
     if exchange is None:
         raise RuntimeError("exchange is None in non-BACKTESTING mode")
-    balance = CcxtBalanceProvider(exchange)
     atr_calc = TaAtrCalculator(
         source=lambda s, t, w: ccxt_ohlcv_source(exchange, s, t, w)
     )
     min_lot = CcxtMinLotProvider(exchange)
     return ComputePositionSizeUseCase(
         risk_calculator=risk_calculator,
-        balance_provider=balance,
+        balance_provider=_balance_provider_for_mode(mode, exchange, virtual),
         atr_calculator=atr_calc,
         min_lot_provider=min_lot,
     )
@@ -345,6 +427,8 @@ def _build_h3(
     trade_journal: TradeJournal,
     snapshot_repo: DrawdownSnapshotRepo,
     env_writer: EnvironmentModeWriter,
+    order_client: ExchangeOrderClient | None = None,
+    virtual: VirtualBalanceProvider | None = None,
 ) -> tuple[
     CircuitBreaker,
     OpenDayUseCase,
@@ -353,23 +437,19 @@ def _build_h3(
 ]:
     circuit_breaker = CircuitBreaker()
 
-    # OpenDay re-uses the same balance provider logic as H2.
-    if mode == "BACKTESTING":
-        balance_provider: Any = MockBalanceProvider(Decimal("10000"))
-    else:
-        if exchange is None:
-            raise RuntimeError("exchange is None in non-BACKTESTING mode")
-        balance_provider = CcxtBalanceProvider(exchange)
+    balance_provider: Any = _balance_provider_for_mode(mode, exchange, virtual)
 
     open_day = OpenDayUseCase(
         balance_provider=balance_provider, snapshot_repo=snapshot_repo
     )
 
     # Trip use case needs an ExchangeOrderClient only in PAPER/LIVE.
-    if mode == "BACKTESTING":
+    if order_client is not None:
+        pass  # Use the shared client passed by caller
+    elif mode == "BACKTESTING":
         # In backtesting there are no live orders to cancel. The
         # trip just flips env mode and clears the snapshot.
-        order_client: ExchangeOrderClient = _NoopOrderClient()
+        order_client = _NoopOrderClient()
     else:
         if exchange is None:
             raise RuntimeError("exchange is None in non-BACKTESTING mode")
@@ -471,7 +551,20 @@ def build_composition() -> Composition:
     if mode != "BACKTESTING":
         exchange = _build_exchange()
 
-    compute_position_size = _build_h2(mode, exchange)
+    # VirtualBalanceProvider for PAPER_TRADING — SQLite-backed paper portfolio
+    virtual_balance: VirtualBalanceProvider | None = None
+    if mode == "PAPER_TRADING":
+        from .infrastructure.balance.virtual_balance_provider import (
+            VIRTUAL_PORTFOLIO_DB,
+        )
+        import os as _os
+        cap = _os.environ.get("PAPER_CAPITAL", "10000")
+        virtual_balance = VirtualBalanceProvider(
+            initial_capital=Decimal(cap),
+            db_path=VIRTUAL_PORTFOLIO_DB,
+        )
+
+    compute_position_size = _build_h2(mode, exchange, virtual=virtual_balance)
 
     # Persistence wiring (FASES 1-8)
     if mode == "BACKTESTING":
@@ -490,9 +583,19 @@ def build_composition() -> Composition:
     if mode == "BACKTESTING":
         stream_barrier: StreamConsumptionBarrier | None = None
         idempotency_store: ExecutionIdempotencyStore | None = None
+        event_store: EventStore | None = None
     else:
         stream_barrier = StreamConsumptionBarrier()
         idempotency_store = SQLiteExecutionIdempotencyStore()
+        event_store = SQLiteEventStore()
+
+    # Create shared ExchangeOrderClient — single instance for all use cases
+    if mode == "BACKTESTING":
+        shared_order_client: ExchangeOrderClient = _NoopOrderClient()
+    else:
+        if exchange is None:
+            raise RuntimeError("exchange is None in non-BACKTESTING mode")
+        shared_order_client = _build_order_client(exchange)
 
     env_writer: EnvironmentModeWriter = FileEnvironmentModeWriter()
     (
@@ -500,18 +603,30 @@ def build_composition() -> Composition:
         open_day,
         trip,
         check,
-    ) = _build_h3(mode, exchange, trade_journal, snapshot_repo, env_writer)
+    ) = _build_h3(
+        mode, exchange, trade_journal, snapshot_repo, env_writer,
+        order_client=shared_order_client, virtual=virtual_balance,
+    )
+
+    # Create ExecutionAuthority — wraps shared client with CB check + guard
+    if mode == "BACKTESTING":
+        execution_authority: Any = None
+    else:
+        execution_authority = ExecutionAuthority(
+            order_client=shared_order_client,
+            is_halted=check.is_halted,
+        )
 
     # H4 wiring — PlaceOrderUseCase
-    if mode == "BACKTESTING":
-        order_client_for_placement: ExchangeOrderClient = _NoopOrderClient()
+    if execution_authority is not None:
+        place_order_uc = PlaceOrderUseCase(
+            order_client=execution_authority,
+            is_halted=check.is_halted,
+        )
     else:
-        if exchange is None:
-            raise RuntimeError("exchange is None in non-BACKTESTING mode")
-        order_client_for_placement = _build_order_client(exchange)
-    place_order_uc = PlaceOrderUseCase(
-        order_client=order_client_for_placement
-    )
+        place_order_uc = PlaceOrderUseCase(
+            order_client=_NoopOrderClient(),
+        )
 
     # H4-B wiring — Incident monitoring
     incident_repo: IncidentRepository = InMemoryIncidentRepository()
@@ -577,6 +692,19 @@ def build_composition() -> Composition:
         signal_processor=signal_processor,
     )
 
+    algo_client = _build_algo_client(exchange)
+    order_cleanup_service: OrderCleanupService | None = None
+    if algo_client is not None:
+        order_cleanup_service = OrderCleanupService(
+            algo_client=algo_client,
+            position_repo=position_repo,
+        )
+
+    market_continuity_guard = MarketContinuityGuard(
+        gap_threshold_s=60.0,
+        recovery_ticks=10,
+    )
+
     return Composition(
         compute_position_size=compute_position_size,
         check_drawdown=check,
@@ -598,9 +726,16 @@ def build_composition() -> Composition:
         streaming=streaming,
         position_repo=position_repo,
         system_snapshot_repo=system_snapshot_repo,
+        disaster_recovery=_get_disaster_recovery(),
         stream_barrier=stream_barrier,
         idempotency_store=idempotency_store,
+        event_store=event_store,
         drift_watchdog=drift_watchdog,
+        algo_client=algo_client,
+        order_cleanup_service=order_cleanup_service,
+        execution_authority=execution_authority,
+        virtual_balance=virtual_balance,
+        market_continuity_guard=market_continuity_guard,
     )
 
 
@@ -1142,11 +1277,12 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
 
     validator = SignalValidator()
 
+    atr_calc: AtrCalculator
     if comp.mode == "BACKTESTING":
         balance_provider: BalanceProvider = MockBalanceProvider(Decimal("10000"))
-        atr_calc: AtrCalculator = _FakeAtrCalculator()
+        atr_calc = _FakeAtrCalculator()
     else:
-        balance_provider = CcxtBalanceProvider(exchange=comp.exchange)
+        balance_provider = comp.virtual_balance if comp.mode == "PAPER_TRADING" and comp.virtual_balance is not None else CcxtBalanceProvider(exchange=comp.exchange)
         atr_calc = TaAtrCalculator(
             source=lambda s, t, w: ccxt_ohlcv_source(comp.exchange, s, t, w)
         )
@@ -1159,13 +1295,23 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
             return False
         drawdown_checker = _not_halted
     else:
-        exchange_client = _build_order_client(comp.exchange)
+        exchange_client = comp.execution_authority
         async def _check_halted() -> bool:
             return await comp.check_drawdown.is_halted()
         drawdown_checker = _check_halted
 
     position_repo = get_position_repo(request)
     execution_logger = StructlogExecutionLogger()
+
+    algo_client = _build_algo_client(comp.exchange)
+
+    # In PAPER_TRADING, pass CcxtBalanceProvider as margin cap provider
+    margin_cap_provider: Any = None
+    if comp.mode == "PAPER_TRADING" and comp.exchange is not None:
+        from .infrastructure.balance.ccxt_balance_provider import (
+            CcxtBalanceProvider,
+        )
+        margin_cap_provider = CcxtBalanceProvider(exchange=comp.exchange)
 
     use_case = ExecuteSignalUseCase(
         signal_validator=validator,
@@ -1175,12 +1321,23 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
         position_repo=position_repo,
         execution_logger=execution_logger,
         is_halted=drawdown_checker,
+        algo_client=algo_client,
+        order_cleanup=comp.order_cleanup_service,
+        notifier=comp.notify_on_event if hasattr(comp, "notify_on_event") else None,
+        verify_sl_after_placement=True,
+        is_testnet=_is_testnet(),
+        margin_cap_provider=margin_cap_provider,
     )
 
-    # ECL Module 4: wrap with ExecutionGate to block non-STREAMING sources
-    from .infrastructure.trading.execution_gate import ExecutionGate
-    gated = ExecutionGate(use_case.execute)
-    use_case.execute = gated.execute  # type: ignore[assignment]
+    # P0: Wrap with ExecutionGuard for full guard coverage (confidence ≥0.75,
+    # volatility spike detection, soft circuit breaker) — same as streaming path
+    from .infrastructure.trading.execution_guard import ExecutionGuard
+    guarded = ExecutionGuard(execute_fn=use_case.execute)
+    original_execute = use_case.execute
+    async def _guarded_execute(signal: object) -> object:
+        signal.metadata["source"] = "REST"  # type: ignore[union-attr]
+        return await guarded.execute(signal)  # type: ignore[arg-type]
+    use_case.execute = _guarded_execute  # type: ignore[assignment]
 
     request.app.state.execute_signal_usecase = use_case
     return use_case
@@ -1202,11 +1359,12 @@ def get_execution_engine_usecase(request: Request) -> ExecutionEngine:
 
     validator = SignalValidator()
 
+    atr_calc: AtrCalculator
     if comp.mode == "BACKTESTING":
         balance_provider: BalanceProvider = MockBalanceProvider(Decimal("10000"))
-        atr_calc: AtrCalculator = _FakeAtrCalculator()
+        atr_calc = _FakeAtrCalculator()
     else:
-        balance_provider = CcxtBalanceProvider(exchange=comp.exchange)
+        balance_provider = comp.virtual_balance if comp.mode == "PAPER_TRADING" and comp.virtual_balance is not None else CcxtBalanceProvider(exchange=comp.exchange)
         atr_calc = TaAtrCalculator(
             source=lambda s, t, w: ccxt_ohlcv_source(comp.exchange, s, t, w)
         )
@@ -1217,13 +1375,21 @@ def get_execution_engine_usecase(request: Request) -> ExecutionEngine:
             return False
         drawdown_checker = _ee_not_halted
     else:
-        exchange_client = _build_order_client(comp.exchange)
+        exchange_client = comp.execution_authority
         async def _ee_check_halted() -> bool:
             return await comp.check_drawdown.is_halted()
         drawdown_checker = _ee_check_halted
 
     position_repo = get_position_repo(request)
     execution_logger = StructlogExecutionLogger()
+
+    # In PAPER_TRADING, pass CcxtBalanceProvider as margin cap provider
+    margin_cap_provider: Any = None
+    if comp.mode == "PAPER_TRADING" and comp.exchange is not None:
+        from .infrastructure.balance.ccxt_balance_provider import (
+            CcxtBalanceProvider,
+        )
+        margin_cap_provider = CcxtBalanceProvider(exchange=comp.exchange)
 
     engine = ExecutionEngine(
         signal_validator=validator,
@@ -1236,6 +1402,7 @@ def get_execution_engine_usecase(request: Request) -> ExecutionEngine:
         risk_engine=RiskEngine(),
         portfolio_manager=PortfolioManager(),
         position_manager=PositionManager(),
+        margin_cap_provider=margin_cap_provider,
     )
     request.app.state.execution_engine_usecase = engine
     return engine
@@ -1256,7 +1423,7 @@ def get_monitor_positions_usecase(request: Request) -> MonitorPositionsUseCase:
     if comp.mode == "BACKTESTING":
         exchange_client: ExchangeOrderClient = _NoopOrderClient()
     else:
-        exchange_client = _build_order_client(comp.exchange)
+        exchange_client = comp.execution_authority
 
     if hasattr(exchange_client, "get_price"):
         price_provider = exchange_client.get_price  # type: ignore[union-attr]
@@ -1278,11 +1445,15 @@ def get_monitor_positions_usecase(request: Request) -> MonitorPositionsUseCase:
                 return Decimal(str(last))
             price_provider = _ccxt_price
 
+    algo_client = _build_algo_client(comp.exchange)
     use_case = MonitorPositionsUseCase(
         position_repo=position_repo,
         exchange_client=exchange_client,
         execution_logger=execution_logger,
         price_provider=price_provider,
+        algo_client=algo_client,
+        order_cleanup=comp.order_cleanup_service,
+        trade_journal=comp.trade_journal,
     )
     request.app.state.monitor_positions_usecase = use_case
     return use_case
@@ -1348,6 +1519,23 @@ async def run_recovery(comp: Composition) -> RecoveryReport | None:
         errors=len(report.errors),
     )
     comp.recovery_report = report
+
+    # Order lifecycle cleanup: after reconciliation, cancel any stale algo orders
+    if comp.order_cleanup_service is not None:
+        try:
+            await comp.order_cleanup_service.cleanup_stale_algo_orders(symbol)
+            log.info(
+                "cleanup_stale_orders_after_recovery",
+                symbol=symbol,
+                gate_state=report.gate.state.value,
+            )
+        except Exception as exc:
+            log.warning(
+                "cleanup_stale_orders_after_recovery_failed",
+                symbol=symbol,
+                error=str(exc),
+            )
+
     return report
 
 

@@ -202,10 +202,12 @@ async def trading_status(request: Request) -> dict:
             "open": positions[:5],
         },
         "pipeline": pipeline_info,
-        "candles_1m": len(candles),
+        "candles": len(candles),
         "recovery": {
             "blocked": getattr(comp, "recovery_blocked", False),
             "gate_state": comp.recovery_report.gate.state.value if comp.recovery_report and hasattr(comp.recovery_report, "gate") else None,
+            "runtime_mode": comp.disaster_recovery.mode.value if hasattr(comp, "disaster_recovery") and comp.disaster_recovery else None,
         },
+        "market_data_gap": getattr(comp.market_continuity_guard, "market_data_gap", False) if hasattr(comp, "market_continuity_guard") and comp.market_continuity_guard else None,
         "exchange": comp.exchange is not None,
     }

@@ -14,7 +14,7 @@ import structlog
 from contextlib import asynccontextmanager
 
 import redis.asyncio as redis
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from .api import (
     backtest_router,
@@ -35,6 +35,12 @@ if TYPE_CHECKING:
     from .application.use_cases.monitor_positions import MonitorPositionsUseCase
 
 log = structlog.get_logger()
+
+# ── Temporal Hard Gates (shared across tick-candle & decision loops) ────────
+LAG_WARN_MS = 5000
+MAX_TICK_LAG_MS = 10_000      # ticks >10s old are stale
+MAX_CANDLE_AGE_MS = 5_400_000  # >90min without fresh candle → skip decision
+
 app = FastAPI(title="argos-analytics-engine", version="0.1.0")
 app.include_router(risk_router)
 app.include_router(circuit_breaker_router)
@@ -103,11 +109,22 @@ async def lifespan(_: FastAPI):
                 snapshot_loaded=recovery_report.snapshot_loaded,
                 actions=recovery_report.actions_taken,
             )
-            # Fix 1 (nuevo): Open stream barrier after successful recovery
+            # Open stream barrier after successful recovery
             if hasattr(comp, "stream_barrier") and comp.stream_barrier is not None:
                 recovery_ts = recovery_report.timestamp.timestamp()
                 comp.stream_barrier.open(recovery_timestamp=recovery_ts)
                 log.info("stream_barrier_opened", recovery_ts=recovery_ts)
+
+            # Auto-open the day to initialize drawdown snapshot
+            if comp.mode != "BACKTESTING" and hasattr(comp, "open_day") and comp.open_day is not None:
+                try:
+                    snap = await comp.open_day.execute(force=True)
+                    log.info(
+                        "day_opened_on_startup",
+                        starting_balance=float(snap.starting_balance),
+                    )
+                except Exception as e:
+                    log.warning("day_open_failed_on_startup", error=str(e))
         else:
             log.info("recovery_skipped", mode=comp.mode)
     except Exception as e:
@@ -201,7 +218,10 @@ async def lifespan(_: FastAPI):
 
             execute_uc = _build_execute_uc(comp)
             monitor_uc = _build_monitor_uc(comp)
-            guard = ExecutionGuard(execute_fn=execute_uc.execute)
+            guard = ExecutionGuard(
+                execute_fn=execute_uc.execute,
+                market_continuity_guard=comp.market_continuity_guard,
+            )
 
             initial_capital = Decimal(os.environ.get("PAPER_CAPITAL", "1000"))
             phase_b_tracker = PhaseBTracker(
@@ -231,11 +251,67 @@ async def lifespan(_: FastAPI):
 
             episode_store = TradeEpisodeStore()
 
+            # ── CCL: Cognitive Completion Layer ───────────────────────────
+            from .infrastructure.edl.ccl_service import CCLService
+            ccl = CCLService(
+                redis_client=redis_client,
+                event_store=comp.event_store,
+                episode_store=episode_store,
+            )
+
+            # ── CCL Consistency Checker ───────────────────────────────────
+            from .infrastructure.edl.consistency import CCLConsistency
+            ccl_consistency = CCLConsistency(
+                event_store=comp.event_store,
+                episode_store=episode_store,
+            )
+            app.state.ccl_consistency = ccl_consistency
+
+            # ── Event Memory (Aggregator + MemoryIndex) ──────────────────
+            from .infrastructure.edl.event_memory import (
+                EventAggregator,
+                MemoryIndex,
+            )
+            event_aggregator = EventAggregator(episode_store=episode_store)
+            memory_index = MemoryIndex(episode_store=episode_store)
+            app.state.event_aggregator = event_aggregator
+            app.state.memory_index = memory_index
+
+            # ── Decision Augmentation (FASE 3) ─────────────────────────
+            from .infrastructure.edl.decision_augmentation import (
+                AdaptiveRiskAdjuster,
+                DecisionAugmentation,
+                PolicyUpdateHook,
+            )
+            policy_hook = PolicyUpdateHook()
+            aug_decision = DecisionAugmentation()
+            risk_adjuster = AdaptiveRiskAdjuster(
+                belief_state=policy_hook,
+                memory_index=memory_index,
+            )
+            app.state.policy_hook = policy_hook
+
+            # ── Composer Activation (FASE 4) ──────────────────────────
+            from .infrastructure.edl.composer_activation import (
+                ModelComparisonLayer,
+                ModelRegistryScanner,
+            )
+            model_scanner = ModelRegistryScanner()
+            model_scanner.scan()
+            comparison_layer = ModelComparisonLayer(
+                scanner=model_scanner,
+            )
+            app.state.comparison_layer = comparison_layer
+
+            # ── EventRecorder: event sourcing for pipeline events ─────────
+            from .infrastructure.event_sourcing import EventRecorder
+            event_store = comp.event_store
+
             t1 = asyncio.create_task(
                 _tick_to_candle_loop(comp, redis_client, stream_monitor, candle_persister)
             )
             t2 = asyncio.create_task(
-                _decision_loop(comp, guard, health_collector, phase_b_tracker, redis_client, symbol, episode_store)
+                _decision_loop(comp, guard, health_collector, phase_b_tracker, redis_client, symbol, episode_store, ccl, event_store, aug_decision, risk_adjuster, policy_hook)
             )
             t3 = asyncio.create_task(
                 _position_monitor_loop(comp, monitor_uc)
@@ -247,12 +323,15 @@ async def lifespan(_: FastAPI):
                 _stream_idle_check_loop(stream_monitor)
             )
             t7 = asyncio.create_task(
-                _phase_b_loop(phase_b_tracker, ecl_health_aggregator, episode_store)
+                _phase_b_loop(phase_b_tracker, ecl_health_aggregator, episode_store, ccl, ccl_consistency, policy_hook)
+            )
+            t9 = asyncio.create_task(
+                _ccl_consistency_loop(ccl_consistency)
             )
             t8 = asyncio.create_task(
                 _shadow_outcome_loop(redis_client, comp, symbol)
             )
-            streaming_tasks = [t1, t2, t3, t5, t6, t7, t8]
+            streaming_tasks = [t1, t2, t3, t5, t6, t7, t8, t9]
 
             t4 = asyncio.create_task(
                 _system_diagnostics_loop(comp, health_collector, redis_client, streaming_tasks)
@@ -330,14 +409,13 @@ async def _tick_to_candle_loop(
     symbol = os.environ.get("SYMBOL", "BTC/USDT")
     stream_key = f"ticks:{symbol.replace('/', '').lower()}"
     last_id = "$"
-    LAG_WARN_MS = 5000
-
     streaming = comp.streaming
     assert streaming is not None
     builder: CandleBuilder = streaming.candle_builder
     buffer = streaming.candle_buffer
     integrity: StreamIntegrityMonitor = stream_monitor
     barrier: StreamConsumptionBarrier | None = comp.stream_barrier
+    mcg = comp.market_continuity_guard
 
     dropped = 0
     dedup_cache: set[str] = set()
@@ -405,6 +483,11 @@ async def _tick_to_candle_loop(
                     if lag_ms > LAG_WARN_MS:
                         log.warning("stream_backpressure_detected", lag_ms=int(round(lag_ms)))
 
+                    # Temporal Hard Gate (A): drop ticks older than threshold
+                    if lag_ms > MAX_TICK_LAG_MS:
+                        log.warning("tick_dropped_stale", lag_ms=int(round(lag_ms)))
+                        continue
+
                     if barrier is not None and not barrier.should_process(ts_ms):
                         dropped += 1
                         if dropped % 1000 == 0:
@@ -430,6 +513,8 @@ async def _tick_to_candle_loop(
 
                     integrity.record_tick(trade_id, ts_ms)
 
+                    mcg.record_tick(ts_ms / 1000)
+
                     update = builder.update(ts_ms=ts_ms, price=price, volume=volume)
                     if update.completed is not None:
                         _pipeline_latency.tick_to_candle_ms.append(
@@ -449,9 +534,14 @@ async def _decision_loop(
     guard: object,
     health_collector: object,
     phase_b_tracker: object,
-    redis_client: Any,
+    redis_client: object,
     symbol: str,
     episode_store: object | None = None,
+    ccl: object | None = None,
+    event_store: object | None = None,
+    aug_decision: object | None = None,
+    risk_adjuster: object | None = None,
+    policy_hook: object | None = None,
 ) -> None:
     """Loop 2: every ~1s, check for new 1h candle, run inference.
 
@@ -468,6 +558,7 @@ async def _decision_loop(
         TradeEpisode,
         TradeEpisodeStore,
     )
+    from .infrastructure.event_sourcing import EventRecorder
 
     streaming = comp.streaming
     assert streaming is not None
@@ -476,6 +567,7 @@ async def _decision_loop(
     buffer = streaming.candle_buffer
     guard_: ExecutionGuard = guard
     health: SystemHealthCollector = health_collector
+    mcg = comp.market_continuity_guard
 
     last_inference_ms: int = 0
     TF_1H_MS = 3_600_000
@@ -500,6 +592,24 @@ async def _decision_loop(
                 if len(candles) < MIN_WARMUP_BARS:
                     continue
 
+                # Market Continuity Guard: freeze inference during gap
+                if mcg.market_data_gap:
+                    log.warning(
+                        "decision_skipped_market_data_gap",
+                        gap_duration_s=round(mcg.gap_duration_s, 1),
+                    )
+                    continue
+
+                # Temporal Hard Gate (B): skip decision if last candle is too old
+                candle_age_ms = int(time.time() * 1000) - last_ts
+                if candle_age_ms > MAX_CANDLE_AGE_MS:
+                    log.warning(
+                        "decision_skipped_stale_candle",
+                        age_ms=candle_age_ms,
+                        last_ts=last_ts,
+                    )
+                    continue
+
                 _decision_ts = time.monotonic_ns()
 
                 if not pipeline.is_loaded:
@@ -522,8 +632,32 @@ async def _decision_loop(
                     (time.monotonic_ns() - _decision_ts) / 1_000_000
                 )
 
+                # ── CCL Hook 1: enrich prediction with prior ────────
+                _ccl_prior = None
+                if ccl is not None:
+                    _ccl_prior = await ccl.enrich_prediction(
+                        result,
+                        pipeline.last_raw_features,
+                    )
+
                 has_signal = result.signal is not None
                 health.record_inference(latency_ms, has_signal)
+
+                # ── Event sourcing: candle_closed + inference ───────
+                if event_store is not None:
+                    await EventRecorder.record(
+                        event_store,
+                        "inference.completed",
+                        "decision_loop",
+                        {
+                            "candles": len(candles),
+                            "has_signal": has_signal,
+                            "latency_ms": latency_ms,
+                            "last_ts": last_ts,
+                            "model_version": result.model_version if hasattr(result, "model_version") else "",
+                            "regime": result.regime if hasattr(result, "regime") else "",
+                        },
+                    )
 
                 if has_signal and redis_client is not None:
                     last = candles[-1] if candles else {}
@@ -586,6 +720,64 @@ async def _decision_loop(
                     confidence=proc_result.execution_signal.confidence,
                 )
 
+                # ── Event sourcing: signal_generated ────────────────
+                if event_store is not None:
+                    await EventRecorder.record(
+                        event_store,
+                        "signal.generated",
+                        "decision_loop",
+                        {
+                            "signal_id": proc_result.execution_signal.signal_id,
+                            "side": proc_result.execution_signal.side.value,
+                            "confidence": proc_result.execution_signal.confidence,
+                            "symbol": proc_result.execution_signal.symbol,
+                            "model_version": result.model_version,
+                            "regime": result.regime,
+                        },
+                    )
+
+                # ── CCL Hook 2: attach posterior before execution ───
+                if ccl is not None:
+                    await ccl.attach_posterior(
+                        proc_result.execution_signal,
+                        _ccl_prior,
+                        result,
+                    )
+
+                # ── FASE 3.1: Decision Augmentation ─────────────────
+                if aug_decision is not None and _ccl_prior is not None:
+                    from .infrastructure.edl.decision_augmentation import DecisionAugmentation
+                    aug: DecisionAugmentation = aug_decision
+                    meta = proc_result.execution_signal.metadata
+                    post_edge = meta.get("ccl_posterior_edge", 0.5)
+                    prior_logodds = meta.get("ccl_prior_logodds", 0.0)
+                    posterior_confidence = abs(prior_logodds) / (abs(prior_logodds) + 1) if prior_logodds != 0 else 0.5
+                    aug_params = aug.augment(
+                        model_confidence=proc_result.execution_signal.confidence,
+                        posterior_edge=post_edge,
+                        posterior_confidence=posterior_confidence,
+                        regime=result.regime,
+                    )
+                    meta["ccl_aug_confidence"] = aug_params.final_confidence
+                    meta["ccl_position_size_mult"] = aug_params.position_size_mult
+                    meta["ccl_risk_mult"] = aug_params.risk_mult
+                    meta["ccl_augmentation_applied"] = aug_params.augmentation_applied
+
+                    if not aug_params.augmentation_applied:
+                        log.debug("ccl:no_augmentation_needed", edge=post_edge)
+
+                # ── FASE 3.3: Adaptive Risk ─────────────────────────
+                if risk_adjuster is not None:
+                    from .infrastructure.edl.decision_augmentation import AdaptiveRiskAdjuster
+                    risk: AdaptiveRiskAdjuster = risk_adjuster
+                    risk_params = risk.get_adjustments(
+                        regime=result.regime,
+                        confidence_band=meta.get("ccl_confidence_band", ""),
+                    )
+                    if risk_params.augmentation_applied:
+                        meta["ccl_adaptive_size_mult"] = risk_params.position_size_mult
+                        meta["ccl_adaptive_risk_mult"] = risk_params.risk_mult
+
                 proc_result.execution_signal.metadata["source"] = "STREAMING"
                 exec_result = await guard_.execute(proc_result.execution_signal)
                 exec_approved = hasattr(exec_result, "report")
@@ -614,10 +806,27 @@ async def _decision_loop(
                         model_version=result.model_version,
                         regime_at_entry=result.regime,
                         feature_hash=feature_hash,
+                        entry_price=Decimal(str(exec_result.report.avg_price)) if hasattr(exec_result.report, "avg_price") and exec_result.report.avg_price else Decimal("0"),
                     )
                     store.append(episode)
                     episode_id = episode.episode_id
                     log.info("[edl] episode_created", episode_id=episode_id, position_id=position_id)
+
+                    # Cache prior for settlement
+                    if ccl is not None and _ccl_prior is not None:
+                        ccl.cache_prior(episode_id, _ccl_prior)
+
+                    # Composer: multi-model comparison
+                    if ccl is not None:
+                        asyncio.create_task(
+                            ccl.compare_models(
+                                primary_side=proc_result.execution_signal.side.value,
+                                primary_confidence=proc_result.execution_signal.confidence,
+                                model_version=result.model_version,
+                                regime=result.regime,
+                                feature_hash=feature_hash,
+                            )
+                        )
 
                 phase_b_tracker.record_execution(
                     signal_id=proc_result.execution_signal.signal_id,
@@ -634,6 +843,22 @@ async def _decision_loop(
                 if exec_approved:
                     health.record_execution()
                     log.info("signal_executed", signal_id=proc_result.execution_signal.signal_id)
+
+                    # Event sourcing: trade_executed
+                    if event_store is not None:
+                        await EventRecorder.record(
+                            event_store,
+                            "trade.executed",
+                            "decision_loop",
+                            {
+                                "signal_id": proc_result.execution_signal.signal_id,
+                                "position_id": position_id or "",
+                                "side": proc_result.execution_signal.side.value,
+                                "confidence": proc_result.execution_signal.confidence,
+                                "episode_id": episode_id,
+                                "entry_price": str(entry_price) if entry_price else "",
+                            },
+                        )
                 else:
                     reason = getattr(exec_result, "reason", "unknown")
                     log.info("signal_not_executed", reason=reason)
@@ -684,6 +909,42 @@ async def _position_monitor_loop(
 
             try:
                 result = await monitor_uc.run()
+                # Update virtual portfolio with closed trade PnL
+                if comp.virtual_balance is not None:
+                    for detail in result.details:
+                        if detail.get("action") == "CLOSE":
+                            pnl_str = detail.get("pnl", "0")
+                            try:
+                                from decimal import Decimal
+                                await comp.virtual_balance.record_trade(Decimal(str(pnl_str)))
+                            except Exception as exc:
+                                log.warning(
+                                    "virtual_balance_record_trade_failed",
+                                    pnl=pnl_str,
+                                    error=str(exc),
+                                )
+                    # Update unrealized PnL from remaining open positions
+                    if comp.position_repo is not None and comp.exchange is not None:
+                        try:
+                            open_positions = await comp.position_repo.list_open()
+                            total_upnl = Decimal("0")
+                            for pos in open_positions:
+                                try:
+                                    ticker = await comp.exchange.fetch_ticker(pos.symbol)
+                                    last = ticker.get("last") or ticker.get("close") or 0.0
+                                    current_price = Decimal(str(last))
+                                    upnl = pos.compute_pnl_at(current_price)
+                                    if upnl is not None:
+                                        total_upnl += upnl
+                                except Exception:
+                                    pass
+                            await comp.virtual_balance.update_unrealized_pnl(total_upnl)
+                        except Exception as exc:
+                            log.warning(
+                                "virtual_balance_upnl_update_failed",
+                                error=str(exc),
+                            )
+
                 if result.closed > 0 or result.sl_updates > 0 or result.be_activations > 0:
                     log.info(
                         "position_monitor_result",
@@ -718,9 +979,36 @@ async def _system_diagnostics_loop(
     log.info("diagnostics_loop_started")
     health: SystemHealthCollector = health_collector
 
+    from .observability.system_health import emit_system_health_snapshot
+    from .observability.sl_integrity import default_sl_tracker
+    from .observability.reconciliation_drift import default_drift_tracker
+    from .observability.execution_integrity import default_execution_tracker
+
     try:
         while True:
             await asyncio.sleep(60.0)
+
+            # PO-Layer: emit system health snapshot
+            open_positions = 0
+            if comp.position_repo is not None:
+                try:
+                    positions = await comp.position_repo.list_open()
+                    open_positions = len(positions)
+                except Exception:
+                    pass
+            emit_system_health_snapshot(
+                sl_tracker=default_sl_tracker,
+                drift_tracker=default_drift_tracker,
+                execution_tracker=default_execution_tracker,
+                open_positions_count=open_positions,
+                algo_api_healthy=True,
+                exchange_connected=comp.exchange is not None,
+                pipeline_loaded=(
+                    comp.streaming is not None
+                    and comp.streaming.inference_pipeline.is_loaded
+                ),
+                recovery_state="COMPLETED" if comp.recovery_report is not None else "PENDING",
+            )
 
             degraded: list[str] = []
 
@@ -800,10 +1088,31 @@ async def _stream_idle_check_loop(stream_monitor: object) -> None:
         pass
 
 
+async def _ccl_consistency_loop(ccl_consistency: object) -> None:
+    """Loop 9: periodic CCL consistency reporting (every 5 min).
+
+    Logs coverage statistics for posterior, likelihood, outcome, and
+    event chain integrity.
+    """
+    from .infrastructure.edl.consistency import CCLConsistency
+
+    checker: CCLConsistency = ccl_consistency
+
+    try:
+        while True:
+            await asyncio.sleep(300.0)
+            await checker.run_all(log_report=True)
+    except asyncio.CancelledError:
+        pass
+
+
 async def _phase_b_loop(
     phase_b_tracker: object,
     ecl_health: object | None = None,
     episode_store: object | None = None,
+    ccl: object | None = None,
+    ccl_consistency: object | None = None,
+    policy_hook: object | None = None,
 ) -> None:
     """Loop 7: Phase B metric collection every 60 seconds.
 
@@ -815,6 +1124,8 @@ async def _phase_b_loop(
     after each tick.
     When ``episode_store`` is provided, settles TradeEpisodes for
     newly closed positions.
+    When ``ccl_consistency`` is provided, runs CCL consistency checks
+    periodically (every 10 iterations).
     """
     from .infrastructure.monitoring.experiment_control_plane import (
         HealthCheckAggregator,
@@ -833,6 +1144,7 @@ async def _phase_b_loop(
 
     # Track which episodes we already settled
     _settled_up_to: int = 0
+    _consistency_counter: int = 0
 
     try:
         while True:
@@ -847,7 +1159,7 @@ async def _phase_b_loop(
                     drawdown_pct=tracker.max_drawdown_pct,
                 )
 
-            # EDL: settle newly closed trades
+            # EDL + CCL: settle newly closed trades with Bayesian reasoning
             if store is not None:
                 closed = tracker.all_closed_since(_settled_up_to)
                 for entry in closed:
@@ -855,17 +1167,46 @@ async def _phase_b_loop(
                         continue
                     ep = store.get(entry.episode_id)
                     if ep is not None and ep.t_exit is None:
-                        settled = ep.settle(
-                            t_exit=entry.closed_at,
-                            pnl=entry.realized_pnl,
-                        )
-                        store.append_settled(settled)
-                        log.info(
-                            "[edl] episode_settled",
-                            episode_id=entry.episode_id,
-                            pnl=str(entry.realized_pnl),
-                        )
+                        if ccl is not None:
+                            from .infrastructure.edl.ccl_service import CCLService
+                            ccl_svc: CCLService = ccl
+                            prior_cached = ccl_svc.get_prior(entry.episode_id)
+                            settled = await ccl_svc.settle_episode(
+                                episode=ep,
+                                pnl=entry.realized_pnl,
+                                t_exit=entry.closed_at,
+                                prediction_confidence=entry.confidence if hasattr(entry, "confidence") else 0.0,
+                                prediction_side=entry.side if hasattr(entry, "side") else "",
+                                regime=ep.regime_at_entry,
+                                prior=prior_cached,
+                                total_episodes=tracker.trade_count,
+                                entry_price=ep.entry_price if ep.entry_price > 0 else None,
+                            )
+                            # FASE 3.2: Policy Update Hook
+                            if settled is not None and policy_hook is not None:
+                                from .infrastructure.edl.decision_augmentation import PolicyUpdateHook
+                                hook: PolicyUpdateHook = policy_hook
+                                hook.update(settled)
+                        else:
+                            settled = ep.settle(
+                                t_exit=entry.closed_at,
+                                pnl=entry.realized_pnl,
+                            )
+                        if settled is not None:
+                            store.append_settled(settled)
+                            log.info(
+                                "[edl] episode_settled",
+                                episode_id=entry.episode_id,
+                                pnl=str(entry.realized_pnl),
+                            )
                 _settled_up_to = tracker.trade_count
+
+            # Periodic CCL consistency check (every 10 iterations = 10 min)
+            _consistency_counter += 1
+            if ccl_consistency is not None and _consistency_counter % 10 == 0:
+                from .infrastructure.edl.consistency import CCLConsistency
+                ccl_check: CCLConsistency = ccl_consistency
+                report = await ccl_check.run_all(log_report=True)
     except asyncio.CancelledError:
         pass
 
@@ -891,12 +1232,13 @@ def _build_execute_uc(comp: Composition) -> object:
     from .infrastructure.indicators.ta_atr_calculator import TaAtrCalculator
     from .infrastructure.ohlcv.ccxt_ohlcv_source import ccxt_ohlcv_source
 
-    from .composition import _build_order_client
-
     if comp.exchange is None:
         raise RuntimeError("exchange is None")
 
-    balance_provider = CcxtBalanceProvider(exchange=comp.exchange)
+    if comp.mode == "PAPER_TRADING" and comp.virtual_balance is not None:
+        balance_provider = comp.virtual_balance
+    else:
+        balance_provider = CcxtBalanceProvider(exchange=comp.exchange)
     atr_calc = TaAtrCalculator(
         source=lambda s, t, w: ccxt_ohlcv_source(comp.exchange, s, t, w)
     )
@@ -911,16 +1253,26 @@ def _build_execute_uc(comp: Composition) -> object:
     idempotency_store = getattr(comp, "idempotency_store", None)
     snapshot_repo = getattr(comp, "system_snapshot_repo", None)
 
+    # In PAPER_TRADING, pass CcxtBalanceProvider as margin cap provider
+    margin_cap_provider: Any = None
+    if comp.mode == "PAPER_TRADING":
+        margin_cap_provider = CcxtBalanceProvider(exchange=comp.exchange)
+
     return ExecuteSignalUseCase(
         signal_validator=SignalValidator(),
         balance_provider=balance_provider,
         atr_calculator=atr_calc,
-        exchange_client=_build_order_client(comp.exchange),
+        exchange_client=comp.execution_authority,
         position_repo=position_repo,
         execution_logger=StructlogExecutionLogger(),
         is_halted=_is_halted,
         idempotency_store=idempotency_store,
         snapshot_repo=snapshot_repo,
+        notifier=getattr(comp, "notify_on_event", None),
+        algo_client=comp.algo_client,
+        order_cleanup=comp.order_cleanup_service,
+        is_testnet=os.environ.get("BINANCE_TESTNET", "false").lower() == "true",
+        margin_cap_provider=margin_cap_provider,
     )
 
 
@@ -933,12 +1285,11 @@ def _build_monitor_uc(comp: Composition) -> object:
     from .infrastructure.execution.structlog_execution_logger import (
         StructlogExecutionLogger,
     )
-    from .composition import _build_order_client
 
     if comp.exchange is None:
         raise RuntimeError("exchange is None")
 
-    exchange_client = _build_order_client(comp.exchange)
+    exchange_client = comp.execution_authority
     if hasattr(exchange_client, "get_price"):
         price_provider = exchange_client.get_price
     else:
@@ -953,11 +1304,15 @@ def _build_monitor_uc(comp: Composition) -> object:
         price_provider = _ccxt_price
 
     position_repo = comp.position_repo if comp.position_repo else InMemoryPositionRepository()
+    trade_journal = getattr(comp, "trade_journal", None)
     return MonitorPositionsUseCase(
         position_repo=position_repo,
         exchange_client=exchange_client,
         execution_logger=StructlogExecutionLogger(),
         price_provider=price_provider,
+        algo_client=comp.algo_client,
+        order_cleanup=comp.order_cleanup_service,
+        trade_journal=trade_journal,
     )
 
 
@@ -1035,10 +1390,11 @@ _pipeline_latency = _PipelineLatencyTracker()
 
 
 @app.get("/health")
-async def health() -> dict:
-    mode = os.environ.get("ENVIRONMENT_MODE", "PAPER_TRADING")
+async def health(request: Request) -> dict:
+    comp: Composition = request.app.state.composition
+    mode = comp.mode if comp is not None else os.environ.get("ENVIRONMENT_MODE", "PAPER_TRADING")
     uptime = time.monotonic() - _boot_timestamp if _boot_timestamp > 0 else 0
-    status = "starting_up" if uptime < _WARMUP_SECONDS else "ok"
+    status = "starting_up" if 0 < uptime < _WARMUP_SECONDS else "ok"
     return {
         "status": status,
         "mode": mode,
@@ -1049,6 +1405,239 @@ async def health() -> dict:
 @app.get("/health/pipeline")
 async def health_pipeline() -> dict:
     return _pipeline_latency.snapshot()
+
+
+@app.get("/health/ccl")
+async def health_ccl(request: Request) -> dict:
+    """CCL health: posterior coverage, episode stats, event chain integrity."""
+    consistency = getattr(request.app.state, "ccl_consistency", None)
+    if consistency is None:
+        return {"status": "not_initialized", "episode_store": None}
+
+    from .infrastructure.edl.consistency import CCLConsistency
+    checker: CCLConsistency = consistency
+    coverage = await checker.verify_posterior_coverage()
+    episode_store = checker._episode_store
+
+    return {
+        "status": "active",
+        "total_episodes": episode_store.count,
+        "total_settled": episode_store.count_settled,
+        "coverage": coverage,
+    }
+
+
+@app.get("/ccl/composer")
+async def ccl_composer(request: Request) -> dict:
+    """Composer status: available models, divergence metrics."""
+    layer = getattr(request.app.state, "comparison_layer", None)
+    if layer is None:
+        return {"status": "not_initialized"}
+    return layer.status()
+
+
+@app.get("/ccl/belief")
+async def ccl_belief(request: Request) -> dict:
+    """Current CCL belief state per regime."""
+    hook = getattr(request.app.state, "policy_hook", None)
+    if hook is None:
+        return {"status": "not_initialized"}
+    return {
+        "status": "ok",
+        "belief": hook.snapshot(),
+    }
+
+
+@app.get("/ccl/trace/{episode_id}")
+async def ccl_trace(episode_id: str, request: Request) -> dict:
+    """Reconstruct the full event chain for a single trade."""
+    consistency = getattr(request.app.state, "ccl_consistency", None)
+    if consistency is None:
+        return {"error": "CCL not initialized"}
+
+    from .infrastructure.edl.consistency import CCLConsistency
+    checker: CCLConsistency = consistency
+    chain = await checker.replay_event_chain(episode_id=episode_id)
+    return {
+        "trade_id": chain.trade_id,
+        "episode_id": chain.episode_id,
+        "chain_complete": chain.chain_complete,
+        "chain_break_reason": chain.chain_break_reason,
+        "missing_links": chain.missing_links,
+        "total_events": chain.total_events,
+        "inference_event": chain.inference_event,
+        "signal_event": chain.signal_event,
+        "execution_event": chain.execution_event,
+        "prior_event": chain.prior_event,
+        "posterior_event": chain.posterior_event,
+        "model_comparison_event": chain.model_comparison_event,
+    }
+
+
+@app.get("/ccl/aggregate")
+async def ccl_aggregate(request: Request) -> dict:
+    """Aggregate CCL episodes by regime, confidence band, and outcome."""
+    aggregator = getattr(request.app.state, "event_aggregator", None)
+    if aggregator is None:
+        return {"status": "not_initialized"}
+
+    report = aggregator.aggregate()
+    return {
+        "status": "ok",
+        "total_trades": report.total_trades,
+        "total_settled": report.total_settled,
+        "overall_win_rate": report.overall_win_rate,
+        "overall_pnl": report.overall_pnl,
+        "by_regime": [
+            {
+                "regime": r.regime,
+                "total_trades": r.total_trades,
+                "wins": r.wins,
+                "losses": r.losses,
+                "total_pnl": r.total_pnl,
+                "win_rate": r.win_rate,
+                "profit_factor": r.profit_factor,
+                "avg_confidence": r.avg_confidence,
+                "avg_likelihood": r.avg_likelihood,
+                "avg_posterior_edge": r.avg_posterior_edge,
+            }
+            for r in report.by_regime
+        ],
+        "by_confidence": [
+            {
+                "band": c.band,
+                "total_trades": c.total_trades,
+                "wins": c.wins,
+                "losses": c.losses,
+                "total_pnl": c.total_pnl,
+                "win_rate": c.win_rate,
+            }
+            for c in report.by_confidence
+        ],
+        "by_outcome": [
+            {
+                "outcome": o.outcome,
+                "count": o.count,
+                "total_pnl": o.total_pnl,
+                "avg_confidence": o.avg_confidence,
+                "avg_likelihood": o.avg_likelihood,
+                "avg_posterior_edge": o.avg_posterior_edge,
+            }
+            for o in report.by_outcome
+        ],
+    }
+
+
+@app.get("/ccl/memory")
+async def ccl_memory(
+    request: Request,
+    regime: str | None = None,
+    outcome: str | None = None,
+    min_trades: int = 1,
+) -> dict:
+    """Query the CCL memory index. Optionally filter by regime, outcome."""
+    index = getattr(request.app.state, "memory_index", None)
+    if index is None:
+        return {"status": "not_initialized", "size": 0, "records": []}
+
+    index.build()
+    records = index.query(
+        regime=regime,
+        outcome=outcome,
+        min_trades=min_trades,
+    )
+    return {
+        "status": "ok",
+        "size": index.size,
+        "records": [
+            {
+                "context_hash": r.context_hash,
+                "regime": r.regime,
+                "confidence_band": r.confidence_band,
+                "outcome": r.outcome,
+                "total_trades": r.total_trades,
+                "wins": r.wins,
+                "losses": r.losses,
+                "win_rate": r.win_rate,
+                "total_pnl": round(r.total_pnl, 2),
+                "avg_posterior_edge": round(r.avg_posterior_edge, 4),
+            }
+            for r in records[:50]
+        ],
+    }
+
+
+@app.get("/ccl/memory/worst")
+async def ccl_memory_worst(request: Request, top_n: int = 5) -> dict:
+    """Return the worst-performing contexts."""
+    index = getattr(request.app.state, "memory_index", None)
+    if index is None:
+        return {"status": "not_initialized"}
+    index.build()
+    return {
+        "status": "ok",
+        "worst_contexts": [
+            {
+                "context_hash": r.context_hash,
+                "regime": r.regime,
+                "band": r.confidence_band,
+                "outcome": r.outcome,
+                "total_trades": r.total_trades,
+                "win_rate": r.win_rate,
+                "total_pnl": round(r.total_pnl, 2),
+            }
+            for r in index.worst_contexts(top_n=top_n)
+        ],
+    }
+
+
+@app.get("/ccl/memory/best")
+async def ccl_memory_best(request: Request, top_n: int = 5) -> dict:
+    """Return the best-performing contexts."""
+    index = getattr(request.app.state, "memory_index", None)
+    if index is None:
+        return {"status": "not_initialized"}
+    index.build()
+    return {
+        "status": "ok",
+        "best_contexts": [
+            {
+                "context_hash": r.context_hash,
+                "regime": r.regime,
+                "band": r.confidence_band,
+                "outcome": r.outcome,
+                "total_trades": r.total_trades,
+                "win_rate": r.win_rate,
+                "total_pnl": round(r.total_pnl, 2),
+            }
+            for r in index.best_contexts(top_n=top_n)
+        ],
+    }
+
+
+@app.post("/ccl/check")
+async def ccl_check(request: Request) -> dict:
+    """Run full CCL consistency check on demand and return report."""
+    consistency = getattr(request.app.state, "ccl_consistency", None)
+    if consistency is None:
+        return {"status": "not_initialized"}
+
+    from .infrastructure.edl.consistency import CCLConsistency
+    checker: CCLConsistency = consistency
+    report = await checker.run_all(log_report=True)
+    return {
+        "status": "ok" if report.all_ok else "issues_detected",
+        "total_episodes": report.total_episodes,
+        "total_settled": report.total_settled,
+        "posterior_coverage_pct": report.posterior_coverage_pct,
+        "missing_posterior": report.missing_posterior[:10],
+        "missing_likelihood": report.missing_likelihood[:10],
+        "missing_outcome": report.missing_outcome[:10],
+        "broken_chains": report.broken_chains[:5],
+        "passes": report.passes,
+        "failures": report.failures,
+        "all_ok": report.all_ok,
+    }
 
 
 if __name__ == "__main__":

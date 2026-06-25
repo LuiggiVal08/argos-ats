@@ -38,6 +38,7 @@ class ExecutionGuard:
         soft_pause_failures: int = 3,
         soft_pause_seconds: float = 30.0,
         atr_window: int = 20,
+        market_continuity_guard: object | None = None,
     ) -> None:
         self._execute = execute_fn
         self._confidence_threshold = confidence_threshold
@@ -51,9 +52,19 @@ class ExecutionGuard:
         self._rejected_low_confidence = 0
         self._volatility_reductions = 0
         self._soft_pauses_triggered = 0
+        self._mcg = market_continuity_guard
 
     async def execute(self, signal: ExecutionSignal) -> object:
         now = time.monotonic()
+
+        # Market Continuity Guard: block execution if data gap active
+        if self._mcg is not None and getattr(self._mcg, "market_data_gap", False):
+            log.info(
+                "execution_guard_market_data_gap",
+                gap_duration_s=round(getattr(self._mcg, "gap_duration_s", 0), 1),
+                reason="market_data_gap_active",
+            )
+            return _GuardRejected("market_data_gap_active")
 
         if now < self._paused_until:
             remaining = self._paused_until - now
