@@ -618,10 +618,11 @@ def build_composition() -> Composition:
         )
 
     # H4 wiring — PlaceOrderUseCase
+    # is_halted is NOT passed here; ExecutionAuthority (the order_client)
+    # already gates place_composite_order with is_halted check.
     if execution_authority is not None:
         place_order_uc = PlaceOrderUseCase(
             order_client=execution_authority,
-            is_halted=check.is_halted,
         )
     else:
         place_order_uc = PlaceOrderUseCase(
