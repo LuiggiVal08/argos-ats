@@ -184,3 +184,54 @@ class TestPlaceOrderUseCaseSadPaths:
             )
 
         assert "entry_order_failed" in str(exc.value)
+
+
+class TestPlaceOrderWiringContract:
+    """Regression: PlaceOrderUseCase does NOT accept is_halted.
+
+    The is_halted check belongs to ExecutionAuthority, which wraps the
+    order_client and gates place_composite_order. Passing is_halted to
+    PlaceOrderUseCase directly was a wiring error (composition.py:624).
+    """
+
+    def test_constructor_does_not_accept_is_halted(self):
+        """PlaceOrderUseCase.__init__ must accept only order_client."""
+        from dataclasses import dataclass
+        from decimal import Decimal
+        from app.application.ports.exchange_order_client import ExchangeOrderClient
+
+        @dataclass
+        class FakeClient(ExchangeOrderClient):
+            async def place_composite_order(self, order): ...
+            async def close_position(self, symbol): ...
+            async def close_all_positions(self): ...
+            async def cancel_all_orders(self): ...
+            async def cancel_order(self, order_id, symbol): ...
+            async def fetch_open_orders(self, symbol): ...
+            async def fetch_position(self, symbol): ...
+            async def fetch_balance(self): ...
+            async def place_stop_loss_order(self, symbol, side, amount, stop_price): ...
+            async def place_emergency_market(self, symbol, side, amount): ...
+            async def close_partial(self, symbol, quantity): ...
+
+        uc = PlaceOrderUseCase(FakeClient())
+        assert isinstance(uc, PlaceOrderUseCase)
+
+        with pytest.raises(TypeError, match="is_halted"):
+            PlaceOrderUseCase(FakeClient(), is_halted=lambda: False)
+
+    def test_execution_authority_handles_is_halted(self):
+        """ExecutionAuthority.place_composite_order gates with is_halted.
+
+        This is the architectural home for circuit breaker checks.
+        If this test fails, the CB protection may have been moved.
+        """
+        from app.infrastructure.trading.execution_authority import ExecutionAuthority
+        import inspect
+
+        sig = inspect.signature(ExecutionAuthority.__init__)
+        params = list(sig.parameters.keys())
+        assert "is_halted" in params, (
+            f"ExecutionAuthority no longer gates with is_halted. "
+            f"Params: {params}"
+        )
