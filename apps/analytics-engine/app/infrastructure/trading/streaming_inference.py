@@ -111,6 +111,13 @@ class StreamingInferencePipeline:
             self._lr_model = pickle.loads(model_path.read_bytes())
             self._scaler = pickle.loads(scaler_path.read_bytes())
 
+            if self._lr_model.classes_.tolist() != [0, 1, 2]:
+                raise RuntimeError(
+                    f"Unexpected class encoding: {self._lr_model.classes_}. "
+                    f"Expected [0, 1, 2] per global encoding standard "
+                    f"(0=SELL, 1=HOLD, 2=BUY)."
+                )
+
             self._loaded = True
             log.info(
                 "checkpoint_loaded",
@@ -235,12 +242,21 @@ class StreamingInferencePipeline:
             probs = self._lr_model.predict_proba(last_row)[0]
 
             class_idx = int(np.argmax(probs))
-            prob_buy = float(probs[0]) if len(probs) > 0 else 0.0
-            prob_sell = float(probs[1]) if len(probs) > 1 else 0.0
-            prob_hold = float(probs[2]) if len(probs) > 2 else 0.0
+            prob_sell = float(probs[0]) if len(probs) > 0 else 0.0
+            prob_hold = float(probs[1]) if len(probs) > 1 else 0.0
+            prob_buy = float(probs[2]) if len(probs) > 2 else 0.0
 
-            side = [SignalSide.BUY, SignalSide.SELL, SignalSide.HOLD][class_idx]
+            side = [SignalSide.SELL, SignalSide.HOLD, SignalSide.BUY][class_idx]
             confidence = float(probs[class_idx])
+
+            expected_side = {0: SignalSide.SELL, 1: SignalSide.HOLD, 2: SignalSide.BUY}
+            selected_class = int(self._lr_model.classes_[class_idx])
+            if side != expected_side[selected_class]:
+                raise RuntimeError(
+                    f"Class encoding mismatch: model class={selected_class} "
+                    f"(expected {expected_side[selected_class]}) but side={side}. "
+                    f"Check SignalSide list ordering / prob variable mapping."
+                )
 
             thresholds = self._model_meta.get("parameters", {}).get("thresholds", {})
             buy_threshold = thresholds.get("BUY", 0.6)
