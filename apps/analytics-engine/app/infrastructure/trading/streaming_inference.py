@@ -21,6 +21,8 @@ import structlog
 from ...domain.value_objects.market_regime import RegimeType
 from ...domain.value_objects.signal_side import SignalSide
 from ...domain.value_objects.trading_signal import TradingSignal
+from ..logging.correlation import set_inference_counter_path
+from ..tracking.inference_tracker import InferenceTracker
 
 log = structlog.get_logger()
 
@@ -40,6 +42,7 @@ class StreamingInferenceResult:
     candle_ts: int = 0
     regime: str = "UNKNOWN"
     error: str = ""
+    inference_sequence_id: str = ""
 
 
 class StreamingInferencePipeline:
@@ -49,6 +52,8 @@ class StreamingInferencePipeline:
         inference_timeframe: str = "5m",
         checkpoint_base: str | Path | None = None,
         additional_feature_provider: Any = None,
+        state_dir: str | Path | None = None,
+        reports_dir: str | Path | None = None,
     ) -> None:
         self._symbol = symbol
         self._inference_tf = inference_timeframe
@@ -73,6 +78,20 @@ class StreamingInferencePipeline:
         self._loaded = False
         self._load_error: str = ""
         self._last_raw_features: dict[str, float] | None = None
+
+        # ── Inference tracking (longitudinal) ──
+        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+        resolved_state = Path(state_dir) if state_dir else (project_root / "state")
+        resolved_reports = Path(reports_dir) if reports_dir else (project_root / "reports")
+        timeline_path = resolved_reports / "active" / "paper_trading" / "inference_timeline.csv"
+        snapshots_dir = resolved_reports / "active" / "paper_trading" / "snapshots"
+        self._tracker = InferenceTracker(
+            timeline_path=timeline_path,
+            snapshots_dir=snapshots_dir,
+            state_dir=resolved_state,
+            symbol=symbol,
+        )
+        set_inference_counter_path(resolved_state / "inference_counter.json")
 
     async def load_checkpoint(self) -> bool:
         try:
@@ -209,6 +228,8 @@ class StreamingInferencePipeline:
                 for i, name in enumerate(cfg.features)
             }
 
+            inference_sequence_id = self._tracker.next_sequence_id()
+
             if self._additional_provider is not None:
                 try:
                     extra = await self._additional_provider.get_features(self._symbol)
@@ -256,6 +277,31 @@ class StreamingInferencePipeline:
 
             regime = self._detect_regime(features_raw, cfg)
 
+            # ── Longitudinal tracking ──
+            try:
+                timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                candle_open = float(ohlcv_buffer[-1].get("open", 0)) if ohlcv_buffer else 0.0
+                features_map = self._last_raw_features or {}
+                self._tracker.append(
+                    sequence_id=inference_sequence_id,
+                    timestamp_utc=timestamp_utc,
+                    candle_open=candle_open,
+                    candle_close=candle_close,
+                    prob_sell=prob_sell,
+                    prob_hold=prob_hold,
+                    prob_buy=prob_buy,
+                    decision=side.value if side != SignalSide.HOLD else "HOLD",
+                    ema_fast=features_map.get("ema_fast"),
+                    bb_middle=features_map.get("bb_middle"),
+                    volume_sma=features_map.get("volume_sma"),
+                    obv=features_map.get("obv"),
+                    market_regime=regime,
+                    position_open=False,
+                    model_version=self._model_meta.get("model_version", ""),
+                )
+            except Exception:
+                log.warning("tracking_append_failed")
+
             if side == SignalSide.HOLD:
                 return StreamingInferenceResult(
                     signal=None,
@@ -265,6 +311,7 @@ class StreamingInferencePipeline:
                     candle_close=candle_close,
                     candle_ts=candle_ts,
                     regime=regime,
+                    inference_sequence_id=inference_sequence_id,
                 )
 
             trading_signal = TradingSignal(
@@ -291,6 +338,7 @@ class StreamingInferencePipeline:
                 candle_close=candle_close,
                 candle_ts=candle_ts,
                 regime=regime,
+                inference_sequence_id=inference_sequence_id,
             )
 
         except Exception as e:

@@ -678,11 +678,14 @@ def build_composition() -> Composition:
     funding_provider = FundingRateProvider(exchange) if exchange else None
     candle_builder = CandleBuilder(symbol=symbol, timeframe_seconds=3600)
     candle_buffer = CandleBuffer(maxlen=2000)
+    project_root = models_dir.parent
     inference_pipeline = StreamingInferencePipeline(
         symbol=symbol,
         inference_timeframe="1h",
         checkpoint_base=models_dir,
         additional_feature_provider=funding_provider,
+        state_dir=project_root / "state",
+        reports_dir=project_root / "reports",
     )
     signal_processor = StreamingSignalProcessor(symbol=symbol)
     streaming = StreamingComponents(
