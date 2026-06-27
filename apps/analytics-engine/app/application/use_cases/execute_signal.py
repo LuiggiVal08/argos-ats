@@ -101,6 +101,11 @@ class ExecuteSignalUseCase:
         tp_atr_multiplier: float = 3.0,
         regime_sl_mult_map: dict[str, float] | None = None,
         price_reconciliation_threshold: float = 0.003,
+        notifier: Any = None,
+        algo_client: Any = None,
+        order_cleanup: Any = None,
+        is_testnet: bool = False,
+        margin_cap_provider: Any = None,
     ) -> None:
         self._validator = signal_validator
         self._balance_provider = balance_provider
@@ -111,6 +116,11 @@ class ExecuteSignalUseCase:
         self._is_halted = is_halted
         self._idempotency = idempotency_store
         self._snapshot_repo = snapshot_repo
+        self._notifier = notifier
+        self._algo_client = algo_client
+        self._order_cleanup = order_cleanup
+        self._is_testnet = is_testnet
+        self._margin_cap_provider = margin_cap_provider
         self._risk_pct = Decimal(str(risk_pct))
         self._sl_mult = Decimal(str(sl_atr_multiplier))
         self._tp_mult = Decimal(str(tp_atr_multiplier))

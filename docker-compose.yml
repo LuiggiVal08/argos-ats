@@ -61,6 +61,8 @@ services:
             - ./apps/analytics-engine/app:/app/app
             - ./contracts:/app/contracts
             - ./models:/app/models:ro
+            - ./reports:/app/reports
+            - ./state:/app/state
         dns:
             - 8.8.8.8
             - 1.1.1.1

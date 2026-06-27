@@ -70,6 +70,9 @@ class MonitorPositionsUseCase:
         price_provider: PriceProvider,
         position_manager: PositionManager | None = None,
         atr_provider: Callable[[str], Awaitable[Decimal]] | None = None,
+        algo_client: Any = None,
+        order_cleanup: Any = None,
+        trade_journal: Any = None,
     ) -> None:
         self._position_repo = position_repo
         self._exchange = exchange_client
@@ -77,6 +80,9 @@ class MonitorPositionsUseCase:
         self._price_provider = price_provider
         self._position_manager = position_manager or PositionManager()
         self._atr_provider = atr_provider
+        self._algo_client = algo_client
+        self._order_cleanup = order_cleanup
+        self._trade_journal = trade_journal
 
     async def run(self) -> MonitorResult:
         positions = await self._position_repo.list_open()

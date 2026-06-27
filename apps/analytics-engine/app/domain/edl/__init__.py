@@ -28,11 +28,16 @@ from .prior import (
     PriorCalculator,
     Regime,
 )
+from .likelihood import LikelihoodCalculator
+from .bayesian_update import BayesianUpdater, PosteriorResult
 
 __all__ = [
     "DEFAULT_LAMBDA",
     "P_BASE",
+    "BayesianUpdater",
+    "LikelihoodCalculator",
     "ModelFamily",
+    "PosteriorResult",
     "PriorComponents",
     "PriorResult",
     "PriorCalculator",
