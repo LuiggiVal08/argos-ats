@@ -27,7 +27,7 @@ from pathlib import Path
 EXPERIMENT_ID = "FT-001"
 GIT_TAG = "v0.9.1-forward-test"
 MODEL_ID = "qv2_target_spec_v1_reduced_33_primary"
-PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 FORWARD_TEST_DIR = PROJECT_ROOT / "forward_test"
 REPORTS_DIR = PROJECT_ROOT / "reports" / "forward-test"
 MODEL_DIR = PROJECT_ROOT / "models" / "production" / "btc"
