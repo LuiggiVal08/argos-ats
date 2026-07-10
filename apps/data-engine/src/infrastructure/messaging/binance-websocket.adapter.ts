@@ -24,7 +24,7 @@ export interface BinanceWebSocketAdapterOptions {
 
 const MAX_BACKOFF = 30_000
 const BASE_BACKOFF = 1_000
-const PONG_TIMEOUT_MS = 30_000
+const PONG_TIMEOUT_MS = 120_000
 
 export class BinanceWebSocketAdapter implements ExchangeGateway {
   private ws: WebSocket | null = null
@@ -36,8 +36,11 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
   private totalReconnects = 0
   private connectedAt: number | null = null
   private intentionalClose = false
+  private connectionId = 0
   private onTickHandler: ((tick: Tick) => Promise<void>) | null = null
   private lastTickTs: number | null = null
+  private lastActivityAt: number | null = null
+  private lastPongAt: number | null = null
   private readonly log: (msg: string) => void
   private readonly opts: Required<Omit<BinanceWebSocketAdapterOptions, "logger" | "maxQueueSize">>
 
@@ -77,8 +80,11 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       reconnectAttempt: this.reconnectAttempt,
       totalReconnects: this.totalReconnects,
       connectedAt: this.connectedAt,
+      connectionId: this.connectionId,
       pendingTicks: this.pendingCount,
       droppedTicks: this.droppedTicks,
+      lastActivityAt: this.lastActivityAt,
+      lastPongAt: this.lastPongAt,
     }
   }
 
@@ -94,7 +100,12 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
     this.pendingCount++
     this.maybePause()
     try {
-      await this.onTickHandler!(tick)
+      const handler = this.onTickHandler
+      if (typeof handler !== "function") {
+        this.log("onTickHandler not registered — dropping tick")
+        return
+      }
+      await handler(tick)
     } finally {
       this.pendingCount--
       this.maybeResume()
@@ -133,6 +144,7 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
   }
 
   private async open(): Promise<void> {
+    const myId = ++this.connectionId
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.opts.url)
       this.ws = ws
@@ -140,16 +152,39 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       ws.once("open", () => {
         this.connState = "open"
         this.connectedAt = Date.now()
+        this.lastActivityAt = Date.now()
+        this.lastPongAt = null
         this.reconnectAttempt = 0
-        this.log("connection open")
+        this.log(`connection open (id=${myId})`)
+        if (this.pingTimer) {
+          clearInterval(this.pingTimer)
+          this.pingTimer = null
+        }
         this.pingTimer = setInterval(() => {
-          ws.ping()
-          this.pongWatchdog = setTimeout(() => {
-            this.log("pong timeout — connection dead, forcing reconnect")
-            ws.terminate()
+          const age = this.lastActivityAt ? Date.now() - this.lastActivityAt : -1
+          this.log(`ping sent connection_id=${myId} last_activity_age=${age}ms`)
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.ping()
+          }
+          if (this.pongWatchdog) {
+            clearTimeout(this.pongWatchdog)
+            this.pongWatchdog = null
+          }
+          const watchdogId = setTimeout(() => {
+            if (myId !== this.connectionId) return
+            const elapsed = this.lastActivityAt ? Date.now() - this.lastActivityAt : -1
+            if (elapsed < this.opts.pongTimeoutMs) {
+              this.log(`watchdog_skip: last_activity_age=${elapsed}ms < threshold=${this.opts.pongTimeoutMs}ms — connection healthy`)
+              return
+            }
+            this.log(`watchdog_fire: last_activity_age=${elapsed}ms threshold=${this.opts.pongTimeoutMs}ms — connection dead, forcing reconnect`)
+            if (this.ws && myId === this.connectionId) {
+              this.ws.terminate()
+            }
             this.cleanupSocket()
             if (!this.intentionalClose) this.scheduleReconnect()
           }, this.opts.pongTimeoutMs)
+          this.pongWatchdog = watchdogId
         }, this.opts.pingIntervalMs)
         resolve()
       })
@@ -160,6 +195,9 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       })
 
       ws.on("pong", () => {
+        this.lastPongAt = Date.now()
+        this.lastActivityAt = this.lastPongAt
+        this.log(`pong received (last_activity_age=0ms — just refreshed)`)
         if (this.pongWatchdog) {
           clearTimeout(this.pongWatchdog)
           this.pongWatchdog = null
@@ -167,6 +205,7 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
       })
 
       ws.on("message", (data) => {
+        this.lastActivityAt = Date.now()
         try {
           const msg = JSON.parse(data.toString("utf8")) as {
             stream?: string
@@ -176,14 +215,25 @@ export class BinanceWebSocketAdapter implements ExchangeGateway {
           if (!trade || trade.e !== "trade") return
           this.lastTickTs = Date.now()
           const tick = tickFromBinanceTrade(trade)
-          void this.processTick(tick)
+          this.processTick(tick).catch((err) => {
+            this.log(
+              `tick processing error: ${err.message} ` +
+              `trade=${tick.tradeId} price=${tick.price} qty=${tick.quantity}`,
+            )
+          })
         } catch (e) {
           this.log(`parse error: ${(e as Error).message}`)
         }
       })
 
       ws.on("close", (code, reason) => {
-        this.log(`closed code=${code} reason=${reason.toString()}`)
+        if (this.ws !== ws) {
+          this.log(`ignoring stale close from connection #${myId} (current is #${this.connectionId})`)
+          return
+        }
+        const reasonStr = reason.toString() || "(no reason)"
+        const lastActivityAge = this.lastActivityAt ? Date.now() - this.lastActivityAt : 'never'
+        this.log(`closed code=${code} reason="${reasonStr}" last_activity_age=${lastActivityAge}ms connection_id=${myId}`)
         this.cleanupSocket()
         if (!this.intentionalClose) {
           this.totalReconnects++

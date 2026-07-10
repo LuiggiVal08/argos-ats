@@ -117,5 +117,6 @@ export function preflightCheck(): void {
     process.exit(1)
   }
 
-  console.log(`[security] PREFLIGHT PASSED [data-engine] mode=${mode}`)
+  // eslint-disable-next-line no-console
+  console.info(`[security] PREFLIGHT PASSED [data-engine] mode=${mode}`)
 }

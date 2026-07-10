@@ -1,4 +1,3 @@
-import { Candle } from "../../domain/entities/candle";
 import { CandleState } from "./candle-store.port";
 
 export interface SystemSnapshot {

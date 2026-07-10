@@ -2,15 +2,19 @@
 
 Para recuperación ante reinicios del bot. Mismo patrón que
 FileBacktestReporter (H8) pero con lectura/escritura bidireccional.
+
+NOTE: Production uses SQLitePositionRepository. This file is used
+for tests and development only.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ...domain.value_objects.live_position import LivePosition
 from ...domain.value_objects.order import OrderSide
@@ -37,6 +41,7 @@ class FilePositionRepository:
 
     def __init__(self, file_path: str = "data/positions.json") -> None:
         self._file_path = file_path
+        self._lock = asyncio.Lock()
         self._ensure_dir()
 
     def _ensure_dir(self) -> None:
@@ -51,6 +56,14 @@ class FilePositionRepository:
     def _save_all(self, data: dict[str, dict]) -> None:
         with open(self._file_path, "w") as f:
             json.dump(data, f, cls=_PositionEncoder, indent=2)
+
+    async def _atomic_update(self, fn: Callable[[dict[str, dict]], dict[str, dict]]) -> dict[str, dict]:
+        """Execute fn inside a lock, passing the current state and saving the result."""
+        async with self._lock:
+            data = self._load_all()
+            data = fn(data)
+            self._save_all(data)
+            return data
 
     def _dict_to_position(self, d: dict) -> LivePosition:
         return LivePosition(
@@ -71,24 +84,25 @@ class FilePositionRepository:
         )
 
     async def save(self, position: LivePosition) -> None:
-        data = self._load_all()
-        data[position.position_id] = {
-            "position_id": position.position_id,
-            "symbol": position.symbol,
-            "side": position.side.value,
-            "units": position.units,
-            "entry_price": position.entry_price,
-            "current_price": position.current_price,
-            "sl_price": position.sl_price,
-            "tp_price": position.tp_price,
-            "unrealized_pnl": position.unrealized_pnl,
-            "opened_at": position.opened_at,
-            "closed_at": position.closed_at,
-            "realized_pnl": position.realized_pnl,
-            "status": position.status,
-            "metadata": position.metadata,
-        }
-        self._save_all(data)
+        async def _upsert(data: dict[str, dict]) -> dict[str, dict]:
+            data[position.position_id] = {
+                "position_id": position.position_id,
+                "symbol": position.symbol,
+                "side": position.side.value,
+                "units": position.units,
+                "entry_price": position.entry_price,
+                "current_price": position.current_price,
+                "sl_price": position.sl_price,
+                "tp_price": position.tp_price,
+                "unrealized_pnl": position.unrealized_pnl,
+                "opened_at": position.opened_at,
+                "closed_at": position.closed_at,
+                "realized_pnl": position.realized_pnl,
+                "status": position.status,
+                "metadata": position.metadata,
+            }
+            return data
+        await self._atomic_update(_upsert)
 
     async def load(self, position_id: str) -> LivePosition | None:
         data = self._load_all()
@@ -108,9 +122,10 @@ class FilePositionRepository:
         return [self._dict_to_position(d) for d in data.values()]
 
     async def delete(self, position_id: str) -> bool:
-        data = self._load_all()
-        if position_id not in data:
-            return False
-        del data[position_id]
-        self._save_all(data)
-        return True
+        async with self._lock:
+            data = self._load_all()
+            if position_id not in data:
+                return False
+            del data[position_id]
+            self._save_all(data)
+            return True
