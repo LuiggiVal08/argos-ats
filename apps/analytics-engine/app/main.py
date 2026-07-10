@@ -1433,7 +1433,7 @@ _pipeline_latency = _PipelineLatencyTracker()
 
 @app.get("/health")
 async def health(request: Request) -> dict:
-    comp: Composition = request.app.state.composition
+    comp: Composition | None = getattr(request.app.state, "composition", None)
     mode = comp.mode if comp is not None else os.environ.get("ENVIRONMENT_MODE", "PAPER_TRADING")
     uptime = time.monotonic() - _boot_timestamp if _boot_timestamp > 0 else 0
     status = "starting_up" if 0 < uptime < _WARMUP_SECONDS else "ok"
