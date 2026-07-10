@@ -132,9 +132,9 @@ class TestCreateTargets:
 
     def test_last_lookahead_are_hold(self, preprocessor, sample_ohlcv, config):
         targets = await_async(preprocessor.create_targets(sample_ohlcv, config))
-        # Los ultimos target_lookahead elementos deberian ser HOLD
+        # Los ultimos target_lookahead elementos deberian ser HOLD [0, 1, 0]
         for i in range(-config.target_lookahead, 0):
-            assert targets[i][2] == 1.0, f"index {i} should be HOLD"
+            assert targets[i][1] == 1.0, f"index {i} should be HOLD [0,1,0]"
 
 
 # Helper: pytest-asyncio no esta disponible, usamos corrutina manual

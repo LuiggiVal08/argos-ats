@@ -39,6 +39,29 @@ from ...domain.entities.multi_timeframe_aligner import MultiTimeframeAligner
 from ...domain.value_objects.model_config import ModelConfig
 from ...domain.value_objects.scaler_type import ScalerType
 
+# ── Feature contract: semantic classification ──────────────────────────────
+# A feature is "MTF" (multi-timeframe) if its name matches any known
+# htf_{indicator}_{tf} pattern. This registry is the single source of truth
+# for distinguishing base vs MTF features, regardless of their position in
+# ModelConfig.features. Position-based slicing was the root cause of
+# INCIDENT-001 follow-up (MTF features interleaved in reduced_33 set).
+MTF_FEATURE_REGISTRY: frozenset[str] = frozenset(
+    f"htf_{ind}_{tf}"
+    for tf in ("4h", "1d")
+    for ind in MultiTimeframeAligner.INDICATOR_COLS
+)
+
+
+def is_mtf_feature(name: str) -> bool:
+    """Returns True if *name* is a known multi-timeframe feature.
+
+    Classification is purely semantic (naming convention + registry),
+    not positional. A feature starting with ``htf_`` that exists in
+    ``MTF_FEATURE_REGISTRY`` is MTF regardless of where it appears
+    in the model's feature list.
+    """
+    return name.startswith("htf_") and name in MTF_FEATURE_REGISTRY
+
 
 class TaDataPreprocessor:
     """Preprocesador de OHLCV usando pandas + ta + numpy.
@@ -142,17 +165,20 @@ class TaDataPreprocessor:
             result = pd.concat(features, axis=1)
             result.columns = self.FEATURE_NAMES
 
-            # ── MTF features (si config.features las pide) ───────────
-            if len(config.features) > base_count:
-                extra_names = config.features[base_count:]
+            # ── MTF features (semantic, not positional) ──────────────
+            # Resolve each feature in config.features by its type:
+            #   - base: already in result (from FEATURE_NAMES)
+            #   - MTF:  extracted from MultiTimeframeAligner output
+            #   - funding: filled with 0.0 later
+            # This replaces the old positional slice (features[base_count:])
+            # which silently skipped MTF features interleaved within the
+            # first 20 slots. (INCIDENT-001 follow-up)
+            mtf_needed = [f for f in config.features if is_mtf_feature(f)]
+            if mtf_needed:
                 mtf_df = MultiTimeframeAligner.compute(ohlcv)
-                available_mtf = [c for c in extra_names if c in mtf_df.columns]
+                available_mtf = [f for f in mtf_needed if f in mtf_df.columns]
                 if available_mtf:
-                    mtf_values = mtf_df[available_mtf].values
-                    mtf_cols = pd.DataFrame(
-                        mtf_values, index=result.index, columns=available_mtf
-                    )
-                    result = pd.concat([result, mtf_cols], axis=1)
+                    result = pd.concat([result, mtf_df[available_mtf]], axis=1)
 
             # Rellenar NaN (primeros valores donde los indicadores no tienen historia)
             result = result.bfill().ffill().fillna(0.0)
@@ -269,20 +295,20 @@ class TaDataPreprocessor:
                 if use_atr and atr_values is not None:
                     atr = atr_values[i]
                     if np.isnan(atr) or atr <= 0:
-                        targets[i] = [0.0, 0.0, 1.0]
+                        targets[i] = [0.0, 1.0, 0.0]
                         continue
                     threshold = 1.5 * atr / close[i]
                 else:
                     threshold = config.target_return_pct / 100.0
 
                 if ret > threshold:
-                    targets[i] = [1.0, 0.0, 0.0]
-                elif ret < -threshold:
-                    targets[i] = [0.0, 1.0, 0.0]
-                else:
                     targets[i] = [0.0, 0.0, 1.0]
+                elif ret < -threshold:
+                    targets[i] = [1.0, 0.0, 0.0]
+                else:
+                    targets[i] = [0.0, 1.0, 0.0]
 
-            targets[-lookahead:] = [0.0, 0.0, 1.0]
+            targets[-lookahead:] = [0.0, 1.0, 0.0]
 
             return targets
 
