@@ -76,7 +76,7 @@ class FakeGateway implements ExchangeGateway {
     return this.stateValue
   }
   exchangeInfo() {
-    return { reconnectAttempt: 0, totalReconnects: 0, connectedAt: null }
+    return { reconnectAttempt: 0, totalReconnects: 0, connectedAt: null, connectionId: 0 }
   }
 }
 

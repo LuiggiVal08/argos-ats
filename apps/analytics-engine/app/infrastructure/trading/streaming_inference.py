@@ -1,15 +1,17 @@
 """StreamingInferencePipeline — inference optimized for real-time candle streams.
 
-Loads a LogisticRegression model checkpoint from ``models/{symbol}/``:
-  - model.pkl        → sklearn LogisticRegression
+Loads a LogisticRegression model checkpoint from ``models/production/{symbol}/``:
+  - model.pkl        → sklearn LogisticRegression (must match EXPECTED_CLASSES / EXPECTED_FEATURES)
   - scaler.pkl        → sklearn RobustScaler
   - metadata.json     → config, feature list, version, thresholds
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import pickle
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,9 +24,15 @@ from ...domain.value_objects.market_regime import RegimeType
 from ...domain.value_objects.signal_side import SignalSide
 from ...domain.value_objects.trading_signal import TradingSignal
 from ..logging.correlation import set_inference_counter_path
+from ..logging.inference_logger import log_inference, _compute_feature_hash
 from ..tracking.inference_tracker import InferenceTracker
 
 log = structlog.get_logger()
+
+# ── Model contract: all production models MUST match these ──
+EXPECTED_CLASSES = [0, 1, 2]
+EXPECTED_FEATURES = 30
+EXPECTED_MODEL_VERSION_PREFIX = "qv2_target_spec_v1"
 
 _DEFAULT_SYMBOL = "BTC/USDT"
 _ALLOWED_MISSING = {"funding_rate", "funding_momentum", "funding_change"}
@@ -59,17 +67,16 @@ class StreamingInferencePipeline:
         self._inference_tf = inference_timeframe
         self._additional_provider = additional_feature_provider
 
-        if checkpoint_base is None:
-            self._model_dir = Path(os.environ.get(
+        base_models = Path(
+            os.environ.get(
                 "ARGOS_CHECKPOINT_DIR",
                 str(Path(__file__).resolve().parent.parent.parent.parent.parent / "models"),
-            ))
-        else:
-            self._model_dir = Path(checkpoint_base)
-
-        self._pair_dir_name = symbol.replace("/", "_").replace("-", "_").lower()
-        self._base_symbol = symbol.split("/")[0].lower()
-        self._symbol_dir = self._model_dir / self._pair_dir_name
+            )
+            if checkpoint_base is None
+            else str(checkpoint_base)
+        )
+        self._model_dir = base_models / "production"
+        self._symbol_dir = self._model_dir / symbol.split("/")[0].lower()
 
         self._config: Any = None
         self._model_meta: Any = None
@@ -78,6 +85,9 @@ class StreamingInferencePipeline:
         self._loaded = False
         self._load_error: str = ""
         self._last_raw_features: dict[str, float] | None = None
+        self._model_checksum: str = ""
+        self._scaler_checksum: str = ""
+        self._metadata_checksum: str = ""
 
         # ── Inference tracking (longitudinal) ──
         project_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
@@ -97,17 +107,12 @@ class StreamingInferencePipeline:
         try:
             model_dir = self._symbol_dir
             if not model_dir.exists():
-                fallback = self._model_dir / self._base_symbol
-                if fallback.exists():
-                    model_dir = fallback
-                else:
-                    log.warning(
-                        "checkpoint_dir_not_found",
-                        pair_path=str(self._symbol_dir),
-                        base_path=str(fallback),
-                        hint="create models/<symbol>/ with model.pkl, scaler.pkl, metadata.json",
-                    )
-                    return False
+                log.warning(
+                    "checkpoint_dir_not_found",
+                    path=str(self._symbol_dir),
+                    hint="create models/production/<symbol>/ with model.pkl, scaler.pkl, metadata.json",
+                )
+                return False
 
             metadata = await self._read_json(model_dir / "metadata.json")
             if metadata is None:
@@ -127,14 +132,32 @@ class StreamingInferencePipeline:
                 log.warning("checkpoint_incomplete", path=str(model_dir), missing="scaler.pkl")
                 return False
 
-            self._lr_model = pickle.loads(model_path.read_bytes())
-            self._scaler = pickle.loads(scaler_path.read_bytes())
+            model_bytes = model_path.read_bytes()
+            scaler_bytes = scaler_path.read_bytes()
+            self._lr_model = pickle.loads(model_bytes)
+            self._scaler = pickle.loads(scaler_bytes)
+            self._model_checksum = hashlib.sha256(model_bytes).hexdigest()[:16]
+            self._scaler_checksum = hashlib.sha256(scaler_bytes).hexdigest()[:16]
+            self._metadata_checksum = hashlib.sha256(
+                json.dumps(metadata, sort_keys=True).encode()
+            ).hexdigest()[:16]
 
-            if self._lr_model.classes_.tolist() != [0, 1, 2]:
+            # ── Model contract assertions ──
+            if self._lr_model.classes_.tolist() != EXPECTED_CLASSES:
                 raise RuntimeError(
-                    f"Unexpected class encoding: {self._lr_model.classes_}. "
-                    f"Expected [0, 1, 2] per global encoding standard "
-                    f"(0=SELL, 1=HOLD, 2=BUY)."
+                    f"Expected {EXPECTED_CLASSES}, got {self._lr_model.classes_.tolist()}. "
+                    f"Only models trained with TARGET_SPEC_V1 encoding are accepted."
+                )
+            if self._lr_model.n_features_in_ != EXPECTED_FEATURES:
+                raise RuntimeError(
+                    f"Expected {EXPECTED_FEATURES} features, got {self._lr_model.n_features_in_}. "
+                    f"Only models with TARGET_SPEC_V1 feature set are accepted."
+                )
+            mv = metadata.get("model_version", "")
+            if not mv.startswith(EXPECTED_MODEL_VERSION_PREFIX):
+                raise RuntimeError(
+                    f"Unexpected model_version '{mv}'. "
+                    f"Expected prefix '{EXPECTED_MODEL_VERSION_PREFIX}'."
                 )
 
             self._loaded = True
@@ -183,6 +206,8 @@ class StreamingInferencePipeline:
             )
 
         try:
+            inference_start = time.monotonic()
+
             import pandas as pd
 
             from ...infrastructure.training.data_preprocessor import TaDataPreprocessor
@@ -291,7 +316,27 @@ class StreamingInferencePipeline:
                 side = SignalSide.HOLD
                 confidence = prob_hold
 
-            regime = self._detect_regime(features_raw, cfg)
+            try:
+                import ta as ta_lib
+                df = pd.DataFrame(ohlcv_buffer)
+                adx_val = float(
+                    ta_lib.trend.ADXIndicator(
+                        df["high"], df["low"], df["close"], window=14,
+                    ).adx().iloc[-1]
+                )
+                regime = "TRENDING" if adx_val >= 25.0 else "RANGING"
+            except Exception:
+                adx_val = -1.0
+                regime = "UNKNOWN"
+
+            log.info(
+                "regime_detection",
+                extra={
+                    "adx": round(adx_val, 2),
+                    "regime": regime,
+                    "candles": len(ohlcv_buffer),
+                }
+            )
 
             # ── Longitudinal tracking ──
             try:
@@ -317,6 +362,42 @@ class StreamingInferencePipeline:
                 )
             except Exception:
                 log.warning("tracking_append_failed")
+
+            threshold_buy = float(
+                self._model_meta.get("parameters", {}).get("thresholds", {}).get("BUY", 0.6)
+            )
+            threshold_sell = float(
+                self._model_meta.get("parameters", {}).get("thresholds", {}).get("SELL", 0.4)
+            )
+            try:
+                inference_elapsed_ms = (time.monotonic() - inference_start) * 1000
+                log_inference(
+                    symbol=self._symbol,
+                    model_version=self._model_meta.get("model_version", ""),
+                    model_checksum=self._model_checksum,
+                    scaler_checksum=self._scaler_checksum,
+                    metadata_checksum=self._metadata_checksum,
+                    feature_names=list(cfg.features),
+                    feature_values=features_raw[-1:],
+                    lookahead=cfg.target_lookahead,
+                    buy_threshold=threshold_buy,
+                    sell_threshold=threshold_sell,
+                    prob_sell=prob_sell,
+                    prob_hold=prob_hold,
+                    prob_buy=prob_buy,
+                    predicted_class=class_idx,
+                    final_signal=side.value if side != SignalSide.HOLD else "HOLD",
+                    risk_decision="PENDING",
+                    risk_reason="risk_evaluation_pending",
+                    inference_latency_ms=inference_elapsed_ms,
+                    inference_sequence_id=inference_sequence_id,
+                    candle_close=candle_close,
+                    candle_ts=candle_ts,
+                    regime=regime,
+                    position_open=False,
+                )
+            except Exception:
+                log.warning("inference_log_write_failed")
 
             if side == SignalSide.HOLD:
                 return StreamingInferenceResult(
@@ -402,28 +483,3 @@ class StreamingInferencePipeline:
             features=tuple(feature_names),
             target_lookahead=params.get("lookahead", 5),
         )
-
-    @staticmethod
-    def _detect_regime(
-        features_raw: np.ndarray,
-        config: Any,
-    ) -> str:
-        if features_raw.shape[0] == 0:
-            return "UNKNOWN"
-        last = features_raw[-1]
-        if hasattr(config, "features"):
-            feature_names = list(config.features)
-        elif isinstance(config, dict):
-            feature_names = list(config.get("features", []))
-        else:
-            return "UNKNOWN"
-        if not feature_names or features_raw.shape[1] < len(feature_names):
-            return "UNKNOWN"
-        try:
-            adx_idx = feature_names.index("adx") if "adx" in feature_names else -1
-            if adx_idx >= 0 and adx_idx < len(last):
-                adx = float(last[adx_idx])
-                return "TRENDING" if adx >= 25 else "RANGING"
-        except (ValueError, IndexError):
-            pass
-        return "UNKNOWN"

@@ -30,6 +30,11 @@ COPY contracts/ contracts/
 # App source overlay
 COPY apps/analytics-engine/app/ app/
 
+# Create writable mount points for named volumes (reports, state)
+# Must be after pip install so setuptools flat-layout doesn't pick them up
+# as top-level packages. (INCIDENT-001 follow-up)
+RUN mkdir -p /app/reports /app/state && chown argos:argos /app/reports /app/state
+
 # Strip build-only packages from final image
 RUN apt-get purge -y --auto-remove gcc g++ && rm -rf /var/lib/apt/lists/*
 

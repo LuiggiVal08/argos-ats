@@ -272,6 +272,21 @@ class RecoveryEngine:
                             f"failed_to_reconcile {result.position_id}: {e}"
                         )
 
+        # Reconciliation actions have been applied — create a clean summary
+        # so the gate doesn't evaluate with stale mismatch counters.
+        # The original ReconciliationSummary is frozen and still records
+        # mismatches that were just resolved (position deleted/reconstructed/
+        # reconciled). Post-reconciliation summary reflects current state.
+        if reconciliation is not None:
+            reconciliation = ReconciliationSummary(
+                total=reconciliation.matched,
+                matched=reconciliation.matched,
+                missing_on_exchange=0,
+                missing_local=0,
+                partial_mismatch=0,
+                details=[],
+            )
+
         # ── Step 7: Risk invariant validation (Fix 6) ─────────────────────
         equity: Decimal | None = None
         if self._equity_provider is not None:

@@ -1279,7 +1279,9 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
 
     comp = _comp(request)
 
-    validator = SignalValidator()
+    validator = SignalValidator(
+        regime_thresholds={"TRENDING": 0.55, "RANGING": 0.62},
+    )
 
     atr_calc: AtrCalculator
     if comp.mode == "BACKTESTING":
@@ -1333,7 +1335,7 @@ def get_execute_signal_usecase(request: Request) -> ExecuteSignalUseCase:
         margin_cap_provider=margin_cap_provider,
     )
 
-    # P0: Wrap with ExecutionGuard for full guard coverage (confidence ≥0.75,
+    # P0: Wrap with ExecutionGuard for full guard coverage (confidence ≥0.70,
     # volatility spike detection, soft circuit breaker) — same as streaming path
     from .infrastructure.trading.execution_guard import ExecutionGuard
     guarded = ExecutionGuard(execute_fn=use_case.execute)
@@ -1361,7 +1363,9 @@ def get_execution_engine_usecase(request: Request) -> ExecutionEngine:
     from .domain.entities.portfolio_manager import PortfolioManager
     from .domain.entities.position_manager import PositionManager
 
-    validator = SignalValidator()
+    validator = SignalValidator(
+        regime_thresholds={"TRENDING": 0.55, "RANGING": 0.62},
+    )
 
     atr_calc: AtrCalculator
     if comp.mode == "BACKTESTING":

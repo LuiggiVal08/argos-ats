@@ -38,6 +38,9 @@ export class HealthController {
     reconnectAttempt: number
     totalReconnects: number
     connectedAt: number | null
+    connectionId: number
+    lastActivityAt: number | null
+    lastPongAt: number | null
   } {
     const state = this.exchange.state()
     const connected = state === "open"
@@ -53,6 +56,9 @@ export class HealthController {
       reconnectAttempt: info.reconnectAttempt,
       totalReconnects: info.totalReconnects,
       connectedAt: info.connectedAt,
+      connectionId: info.connectionId,
+      lastActivityAt: info.lastActivityAt ?? null,
+      lastPongAt: info.lastPongAt ?? null,
     }
   }
 }

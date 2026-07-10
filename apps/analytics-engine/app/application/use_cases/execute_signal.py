@@ -106,6 +106,7 @@ class ExecuteSignalUseCase:
         order_cleanup: Any = None,
         is_testnet: bool = False,
         margin_cap_provider: Any = None,
+        verify_sl_after_placement: bool = True,
     ) -> None:
         self._validator = signal_validator
         self._balance_provider = balance_provider
@@ -121,6 +122,7 @@ class ExecuteSignalUseCase:
         self._order_cleanup = order_cleanup
         self._is_testnet = is_testnet
         self._margin_cap_provider = margin_cap_provider
+        self._verify_sl_after_placement = verify_sl_after_placement
         self._risk_pct = Decimal(str(risk_pct))
         self._sl_mult = Decimal(str(sl_atr_multiplier))
         self._tp_mult = Decimal(str(tp_atr_multiplier))

@@ -94,8 +94,8 @@ class LiveDriftWatchdog:
                     journal_event_count = len(events)
                     expected_pnl = Decimal("0")
                     for ev in events:
-                        if hasattr(ev, "pnl") and ev.pnl is not None:
-                            expected_pnl += ev.pnl
+                        if hasattr(ev, "realized_pnl") and ev.realized_pnl is not None:
+                            expected_pnl += ev.realized_pnl
                 except Exception as e:
                     log.warning("drift_watchdog_journal_fetch_failed", error=str(e))
 

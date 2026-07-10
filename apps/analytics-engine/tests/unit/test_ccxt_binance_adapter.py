@@ -33,6 +33,7 @@ def mock_exchange() -> MagicMock:
     ex.fetch_ticker = AsyncMock()
     ex.fetch_open_orders = AsyncMock()
     ex.cancel_order = AsyncMock()
+    ex.fetch_positions = AsyncMock()
     ex.set_sandbox_mode = MagicMock()
     return ex
 
@@ -320,3 +321,83 @@ class TestCloseAllPositions:
         }
         results = await adapter.close_all_positions()
         assert len(results) == 0
+
+
+# ── close_partial ──────────────────────────────────────────────────────
+
+
+class TestClosePartial:
+    async def test_long_sends_sell_reduce_only(
+        self, adapter: CcxtBinanceTestnetAdapter, mock_exchange: MagicMock,
+    ) -> None:
+        mock_exchange.fetch_positions.return_value = [
+            {"symbol": "BTC/USDT", "contracts": 0.1, "side": "long"},
+        ]
+        mock_exchange.create_order.return_value = {
+            "id": "partial-1", "symbol": "BTC/USDT",
+        }
+        await adapter.close_partial("BTC/USDT", Decimal("0.05"))
+        mock_exchange.fetch_positions.assert_awaited_once_with(["BTC/USDT"])
+        mock_exchange.create_order.assert_awaited_once_with(
+            "BTC/USDT", type="market", side="sell",
+            amount=0.05, params={"reduceOnly": True},
+        )
+
+    async def test_short_sends_buy_reduce_only(
+        self, adapter: CcxtBinanceTestnetAdapter, mock_exchange: MagicMock,
+    ) -> None:
+        mock_exchange.fetch_positions.return_value = [
+            {"symbol": "BTC/USDT", "contracts": -0.1, "side": "short"},
+        ]
+        mock_exchange.create_order.return_value = {
+            "id": "partial-2", "symbol": "BTC/USDT",
+        }
+        await adapter.close_partial("BTC/USDT", Decimal("0.05"))
+        mock_exchange.create_order.assert_awaited_once_with(
+            "BTC/USDT", type="market", side="buy",
+            amount=0.05, params={"reduceOnly": True},
+        )
+
+    async def test_unknown_side_raises(
+        self, adapter: CcxtBinanceTestnetAdapter, mock_exchange: MagicMock,
+    ) -> None:
+        mock_exchange.fetch_positions.return_value = [
+            {"symbol": "BTC/USDT", "contracts": 0.1, "side": "both"},
+        ]
+        with pytest.raises(ExchangeOrderClientError, match="partial_close_unknown_side"):
+            await adapter.close_partial("BTC/USDT", Decimal("0.05"))
+
+    async def test_zero_qty_returns_early(
+        self, adapter: CcxtBinanceTestnetAdapter, mock_exchange: MagicMock,
+    ) -> None:
+        await adapter.close_partial("BTC/USDT", Decimal("0"))
+        mock_exchange.fetch_positions.assert_not_called()
+        mock_exchange.create_order.assert_not_called()
+
+    async def test_no_open_position_returns_early(
+        self, adapter: CcxtBinanceTestnetAdapter, mock_exchange: MagicMock,
+    ) -> None:
+        mock_exchange.fetch_positions.return_value = [
+            {"symbol": "BTC/USDT", "contracts": 0, "side": "long"},
+        ]
+        await adapter.close_partial("BTC/USDT", Decimal("0.05"))
+        mock_exchange.create_order.assert_not_called()
+
+    async def test_fetch_positions_failure_raises(
+        self, adapter: CcxtBinanceTestnetAdapter, mock_exchange: MagicMock,
+    ) -> None:
+        mock_exchange.fetch_positions.side_effect = TimeoutError("slow")
+        with pytest.raises(
+            ExchangeOrderClientError, match="partial_close_fetch_positions_failed",
+        ):
+            await adapter.close_partial("BTC/USDT", Decimal("0.05"))
+
+    async def test_create_order_failure_raises(
+        self, adapter: CcxtBinanceTestnetAdapter, mock_exchange: MagicMock,
+    ) -> None:
+        mock_exchange.fetch_positions.return_value = [
+            {"symbol": "BTC/USDT", "contracts": 0.1, "side": "long"},
+        ]
+        mock_exchange.create_order.side_effect = RuntimeError("margin insufficient")
+        with pytest.raises(ExchangeOrderClientError, match="partial_close_failed"):
+            await adapter.close_partial("BTC/USDT", Decimal("0.05"))

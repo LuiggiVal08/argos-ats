@@ -312,6 +312,76 @@ class CcxtBinanceTestnetAdapter:
             ) from e
         return _to_order_result(raw, side)
 
+    # ── Partial close ──────────────────────────────────────────────
+
+    async def close_partial(self, symbol: str, quantity: Decimal) -> None:
+        """Cierra una cantidad parcial de una posicion de futuros a mercado.
+
+        Detecta si la posicion es LONG o SHORT via fetch_positions y
+        envia la orden en la direccion contraria con reduceOnly=True.
+        """
+        qty = abs(float(quantity))
+        if qty <= 0:
+            log.info("close_partial_zero_qty", symbol=symbol)
+            return
+
+        # 1. Fetch positions para detectar el side
+        try:
+            positions = await self._exchange.fetch_positions([symbol])
+        except Exception as e:
+            raise ExchangeOrderClientError(
+                f"partial_close_fetch_positions_failed: {symbol}: {e}"
+            ) from e
+
+        pos_side = ""
+        for p in positions:
+            amt = Decimal(str(p.get("contracts") or p.get("amount") or 0))
+            if amt != 0:
+                pos_side = p.get("side", "").lower()
+                break
+
+        if not pos_side:
+            log.warning("partial_close_no_position", symbol=symbol)
+            return
+
+        # 2. Determinar el lado de cierre (opuesto a la posicion)
+        if pos_side == "short":
+            close_side = "buy"
+        elif pos_side == "long":
+            close_side = "sell"
+        else:
+            raise ExchangeOrderClientError(
+                f"partial_close_unknown_side: {symbol}: pos_side={pos_side}"
+            )
+
+        log.info(
+            "close_partial_position_detected",
+            symbol=symbol,
+            pos_side=pos_side,
+            close_side=close_side,
+            requested_qty=str(qty),
+        )
+
+        # 3. Ejecutar orden reduce-only
+        try:
+            raw = await self._exchange.create_order(
+                symbol,
+                type="market",
+                side=close_side,
+                amount=qty,
+                params={"reduceOnly": True},
+            )
+            log.info(
+                "partial_close_executed",
+                symbol=symbol,
+                quantity=str(qty),
+                order_id=raw.get("id"),
+            )
+        except Exception as e:
+            raise ExchangeOrderClientError(
+                f"partial_close_failed: {symbol}: {e}"
+            ) from e
+
 
 def _to_order_result(raw: dict[str, Any], side: OrderSide) -> OrderResult:
     """Convierte respuesta cruda de CCXT a OrderResult del dominio."""

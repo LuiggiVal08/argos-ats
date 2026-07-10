@@ -2,15 +2,22 @@
 
 Adds three guard rails WITHOUT modifying execution core logic:
 
-  1. Confidence threshold hardened to 0.75 (instead of 0.7).
-  2. Volatility spike detection: if ATR/price ratio spikes > 2x
-     trailing average, position size factor reduced 50%.
-  3. Consecutive-failure soft circuit breaker: 3 failures → 30s pause.
+   1. Confidence threshold: regime-aware (Policy D).
+      TRENDING >= threshold_trending (default 0.55)
+      RANGING  >= threshold_ranging  (default 0.62)
+   2. Volatility spike detection: if ATR/price ratio spikes > 2x
+      trailing average, position size factor reduced 50%.
+   3. Consecutive-failure soft circuit breaker: 3 failures → 30s pause.
 
 All decisions are logged with structured events.
+
+Regime thresholds are read from environment variables:
+  EXECUTION_THRESHOLD_TRENDING (default 0.55)
+  EXECUTION_THRESHOLD_RANGING  (default 0.62)
 """
 from __future__ import annotations
 
+import os
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -21,6 +28,9 @@ import structlog
 from ...domain.value_objects.execution_signal import ExecutionSignal
 
 log = structlog.get_logger()
+
+_DEFAULT_THRESHOLD_TRENDING = 0.55
+_DEFAULT_THRESHOLD_RANGING = 0.62
 
 
 class ExecutionGuard:
@@ -34,14 +44,36 @@ class ExecutionGuard:
     def __init__(
         self,
         execute_fn: object,
-        confidence_threshold: float = 0.75,
+        confidence_threshold: float | None = None,
+        threshold_trending: float | None = None,
+        threshold_ranging: float | None = None,
         soft_pause_failures: int = 3,
         soft_pause_seconds: float = 30.0,
         atr_window: int = 20,
         market_continuity_guard: object | None = None,
     ) -> None:
         self._execute = execute_fn
-        self._confidence_threshold = confidence_threshold
+
+        # Regime-aware thresholds (env var > constructor arg > default)
+        self._threshold_trending = float(
+            os.environ.get(
+                "EXECUTION_THRESHOLD_TRENDING",
+                str(threshold_trending if threshold_trending is not None else _DEFAULT_THRESHOLD_TRENDING),
+            )
+        )
+        self._threshold_ranging = float(
+            os.environ.get(
+                "EXECUTION_THRESHOLD_RANGING",
+                str(threshold_ranging if threshold_ranging is not None else _DEFAULT_THRESHOLD_RANGING),
+            )
+        )
+
+        # Legacy fallback (used when regime is unknown)
+        if confidence_threshold is not None:
+            self._fallback_threshold = confidence_threshold
+        else:
+            self._fallback_threshold = max(self._threshold_trending, self._threshold_ranging)
+
         self._soft_pause_failures = soft_pause_failures
         self._soft_pause_seconds = soft_pause_seconds
 
@@ -53,6 +85,16 @@ class ExecutionGuard:
         self._volatility_reductions = 0
         self._soft_pauses_triggered = 0
         self._mcg = market_continuity_guard
+
+    def _get_threshold(self, signal: ExecutionSignal) -> float:
+        """Return the confidence threshold for the signal's regime."""
+        regime = (signal.metadata or {}).get("regime", "") or \
+                 (signal.metadata or {}).get("regime_at_dispatch", "")
+        if regime == "TRENDING":
+            return self._threshold_trending
+        elif regime == "RANGING":
+            return self._threshold_ranging
+        return self._fallback_threshold
 
     async def execute(self, signal: ExecutionSignal) -> object:
         now = time.monotonic()
@@ -75,16 +117,24 @@ class ExecutionGuard:
             )
             return _GuardRejected("soft_circuit_breaker_active")
 
-        if signal.confidence < self._confidence_threshold:
+        regime = (signal.metadata or {}).get("regime", "") or \
+                 (signal.metadata or {}).get("regime_at_dispatch", "UNKNOWN")
+        threshold = self._get_threshold(signal)
+        predicted_class = signal.side.value
+
+        if signal.confidence < threshold:
             self._rejected_low_confidence += 1
             log.info(
-                "rejected_low_confidence",
-                confidence=signal.confidence,
-                threshold=self._confidence_threshold,
+                "signal_rejected_threshold",
                 signal_id=signal.signal_id,
+                regime=regime,
+                predicted_class=predicted_class,
+                confidence=round(signal.confidence, 4),
+                required_threshold=threshold,
+                decision="REJECTED_THRESHOLD",
             )
             return _GuardRejected(
-                f"low_confidence: {signal.confidence:.3f} < {self._confidence_threshold}"
+                f"low_confidence: {signal.confidence:.3f} < {threshold} (regime={regime})"
             )
 
         # Inject volatility-based risk multiplier into signal metadata

@@ -109,14 +109,14 @@ class TestExecutionGuard:
 
     async def test_passes_high_confidence(self):
         inner = AsyncMock(return_value=_FakeResult(approved=True))
-        guard = ExecutionGuard(inner, confidence_threshold=0.75)
+        guard = ExecutionGuard(inner, confidence_threshold=0.70)
         result = await guard.execute(_signal(confidence=0.9))
         inner.assert_awaited_once()
         assert result.approved is True
 
     async def test_rejects_low_confidence(self):
         inner = AsyncMock()
-        guard = ExecutionGuard(inner, confidence_threshold=0.75)
+        guard = ExecutionGuard(inner, confidence_threshold=0.70)
         result = await guard.execute(_signal(confidence=0.5))
         inner.assert_not_awaited()
         assert isinstance(result, _GuardRejected)
@@ -124,14 +124,14 @@ class TestExecutionGuard:
 
     async def test_boundary_confidence_accepted(self):
         inner = AsyncMock(return_value=_FakeResult(approved=True))
-        guard = ExecutionGuard(inner, confidence_threshold=0.75)
-        result = await guard.execute(_signal(confidence=0.75))
+        guard = ExecutionGuard(inner, confidence_threshold=0.70)
+        result = await guard.execute(_signal(confidence=0.70))
         inner.assert_awaited_once()
         assert result.approved is True
 
     async def test_rejected_low_confidence_counter(self):
         inner = AsyncMock()
-        guard = ExecutionGuard(inner, confidence_threshold=0.75)
+        guard = ExecutionGuard(inner, confidence_threshold=0.70)
         await guard.execute(_signal(confidence=0.3))
         await guard.execute(_signal(confidence=0.4))
         assert guard.rejected_low_confidence == 2

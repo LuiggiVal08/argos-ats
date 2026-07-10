@@ -51,7 +51,7 @@ class SQLiteTradeJournal:
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA journal_mode=DELETE")
         self._conn.execute("PRAGMA synchronous=FULL")
         self._init_schema()
 
@@ -198,3 +198,20 @@ class SQLiteTradeJournal:
                 "SELECT COALESCE(SUM(pnl), 0) AS total FROM trades"
             ).fetchone()
         return Decimal(str(row["total"]))
+
+    async def get_all(self) -> list[TradeRecord]:
+        from ...application.ports.trade_journal import TradeRecord
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM trades ORDER BY timestamp ASC"
+            ).fetchall()
+        records: list[TradeRecord] = []
+        for r in rows:
+            records.append(TradeRecord(
+                symbol=r["symbol"],
+                realized_pnl=Decimal(str(r["pnl"])),
+                closed_at=datetime.fromisoformat(r["timestamp"]),
+                reference=r["trade_id"],
+                event_id=r.get("event_id", ""),
+            ))
+        return records

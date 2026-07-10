@@ -9,6 +9,7 @@ Pipeline:
 """
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -119,6 +120,9 @@ class MonitorPositionsUseCase:
                     "action": "HOLD",
                     "reason": decision.reason,
                 })
+                if price > 0:
+                    updated_pos = dataclasses.replace(pos, current_price=price)
+                    await self._position_repo.save(updated_pos)
                 continue
 
             if decision.action == PositionAction.CLOSE:

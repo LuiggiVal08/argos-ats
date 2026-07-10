@@ -13,7 +13,7 @@ services:
             dockerfile: apps/data-engine/Dockerfile
         container_name: argos-data-engine
         ports:
-            - '3000:3000'
+            - '3001:3000'
         environment:
             - ENVIRONMENT_MODE=${ENVIRONMENT_MODE:-PAPER_TRADING}
             - ARGOS_BROKER_URL=redis://broker:6379
@@ -25,10 +25,6 @@ services:
         depends_on:
             broker:
                 condition: service_healthy
-        dns:
-            - 8.8.8.8
-            - 1.1.1.1
-
         networks: [argos-net]
         restart: unless-stopped
         healthcheck:
@@ -61,11 +57,9 @@ services:
             - ./apps/analytics-engine/app:/app/app
             - ./contracts:/app/contracts
             - ./models:/app/models:ro
-            - ./reports:/app/reports
-            - ./state:/app/state
-        dns:
-            - 8.8.8.8
-            - 1.1.1.1
+            - reports-data:/app/reports
+            - state-data:/app/state
+            - ./apps/analytics-engine/data:/app/data
         depends_on:
             broker:
                 condition: service_healthy
@@ -108,3 +102,5 @@ networks:
 
 volumes:
     broker-data:
+    state-data:
+    reports-data:

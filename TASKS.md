@@ -72,6 +72,36 @@ last_updated: 2026-06-27
 | QV3.9R | Phase 3.9 Economic Validation        | ✅     | 100%   | 5/5    |
 | OPV   | Phase 5 Operational Validation       | 🟡     | 50%    | 2/4    |
 | H10   | Distribution Shift Doc & Tracking    | ✅     | 100%   | 8/8    |
+| H11   | Migration ETH/SOL V1 → TARGET_SPEC_V1 | ⬜     | 0%     | 0/0    |
+
+---
+
+## ⬜ H11 — Migration ETH/SOL V1 → TARGET_SPEC_V1
+
+> Retrain ETH/USDT and SOL/USDT models to match the TARGET_SPEC_V1 contract:
+>   - Ternary classification (BUY/SELL/HOLD → classes [0,1,2])
+>   - 30 features (QV2 reduced_33 set)
+>   - Model version prefix `qv2_target_spec_v1`
+> Once retrained, place models in `models/production/eth/` and `models/production/sol/`,
+> then add the symbols back to `composer_activation._KNOWN_SYMBOLS`.
+
+**Rationale**: This was discovered during the class-encoding rotation incident (2026-06-27).
+BTC/USDT had already been migrated to V2 (ternary, 30 features), but ETH and SOL remained
+on V1 (binary, 53 features). The system's model contract assertions correctly reject V1
+models, so ETH/SOL are disabled until they are retrained.
+
+- [ ] H11-001 — Train ETH/USDT with TARGET_SPEC_V1 target encoding
+- [ ] H11-002 — Train SOL/USDT with TARGET_SPEC_V1 target encoding
+- [ ] H11-003 — Place models in `models/production/{symbol}/` (creates `eth/`, `sol/` dirs)
+- [ ] H11-004 — Re-enable ETH/SOL in `composer_activation._KNOWN_SYMBOLS`
+- [ ] H11-005 — Verify contract assertions pass on load
+
+**Progreso**: 0/0 = **0%**
+**Dependencias**: Phase 9 (paper trading validation), training pipeline
+**Notas**:
+- The QV2 reduced_33 feature set is already defined and used for BTC.
+- Training should use the same `ta`-based preprocessor and `LogisticRegression` pipeline.
+- The labeling engine already supports ATR-based ternary classification (H13–H20).
 
 ---
 
@@ -1755,8 +1785,52 @@ Escenario completo: TARGET_SPEC_V1, LR C=10.0 (primary) / C=0.1 (shadow), reduce
   - ✅ Missing model file: file removable, cached in memory
   - ✅ Order rejection: no rejections (normal ops)
 - ⏭ Phase 5.3+ pending: paper trading, latency/resource/storage monitoring
+
+### 2026-06-27 — Class-encoding rotation hotfix + Model loader: production/ + Contract assertions
+
+- 🔴 **Class-encoding rotation bug**: `prob_buy=probs[0]`, `prob_sell=probs[1]`, `prob_hold=probs[2]` era incorrecto. El orden correcto es `prob_sell=probs[0]`, `prob_hold=probs[1]`, `prob_buy=probs[2]` para classes=[0,1,2] donde 0=SELL, 1=HOLD, 2=BUY. Causó side=SELL con probs [0.0359, 0.9101, 0.0541].
+- 🔴 **Hallazgo estructural**: `models/btc -> production/btc` era un symlink local no versionado que ocultaba que `models/btc/` (trackeado en git) contiene un modelo BINARIO (classes=[0,1], 53 features) mientras `models/production/btc/` contiene el modelo MULTICLASE correcto (classes=[0,1,2], 30 features). El sistema funcionaba gracias al symlink, no al diseño.
+- 🔴 **ETH/SOL también incompatibles**: `models/production/eth/` y `models/production/sol/` contienen modelos V1 (binarios, 53 features) que no pasan el nuevo contrato.
+- ✅ **Hotfix rama**: `hotfix/class-encoding-rotation` mergeado a `dev` (commit `6f01ba2`).
+- ✅ **Rama actual**: `fix/loader-production-only`.
+- ✅ **Phase 1 — Loader cambiado**: `streaming_inference.py` ahora apunta a `models/production/{symbol}/` en vez de `models/{symbol}/`. Sin fallback.
+- ✅ **Phase 2 — Contract assertions añadidas**: `EXPECTED_CLASSES=[0,1,2]`, `EXPECTED_FEATURES=30`, `EXPECTED_MODEL_VERSION_PREFIX="qv2_target_spec_v1"`. Las 3 son hard-fail en `load_checkpoint`.
+- ✅ **Phase 3 — ETH/SOL deshabilitados**: `composer_activation._KNOWN_SYMBOLS` reducido a solo `["BTC/USDT"]`.
+- ✅ **Phase 4 — H11 creado**: Migration ETH/SOL V1 → TARGET_SPEC_V1 (0%).
+- ⏳ **Pendiente**: rebuild + restart container, quality checks.
 - ✅ Bugfix: WS no reconectaba tras recuperación del broker (data-engine H1 sad path).
   - Root cause: `HealthMonitorUseCase` cerraba el WS al perder broker pero no lo reconectaba al recuperarse; `BinanceWebSocketAdapter.close()` seteaba `intentionalClose=true` permanentemente.
   - Fix: `reconnect()` method en `ExchangeGateway` port + implementación en adapter (reusa onTickHandler almacenado, resets intentionalClose) + llamada desde health monitor tras flush en recuperación.
   - 3 archivos modificados, 2 tests (1 nuevo + 1 actualizado), 141/148 tests pass (7 skipped pre-existing).
+
+### 2026-06-27 — MTF feature gap fix + Named volumes + PAPER_CAPITAL=5000
+
+- 🔴 **INCIDENT-001**: Posición SHORT 0.1644 BTC abierta incorrectamente por class-encoding rotation bug. Cerrada con BUY market reduceOnly. Net P&L +32.90 USDT. Documentado en `reports/INCIDENT_001_CLASS_ENCODING_ROTATION.md`.
+- ✅ **MTF Feature Gap — Fix estructural**: Reemplazado slicing posicional `config.features[base_count:]` por clasificación semántica vía `is_mtf_feature()` + `MTF_FEATURE_REGISTRY` (frozenset derivado de `MultiTimeframeAligner.INDICATOR_COLS`). Verificado: inference produce confidence 0.88 con las 30 features completas. Fix en `data_preprocessor.py`.
+- ✅ **Named volumes para state/reports**: Cambiados bind mounts a named volumes en docker-compose.yml (`state-data`, `reports-data`). Dockerfile actualizado para pre-crear `/app/reports` y `/app/state` con ownership `argos:argos`. Permissions denied resueltos.
+- ✅ **PAPER_CAPITAL=5000**: Configurado en `.env`. Demo testnet resetada manualmente a 5,000 USDT.
+- ✅ **Threshold investigation completada**: Mapa completo de 5 capas de threshold documentado. Conclusión: el modelo predice HOLD con 0.88 de confianza, no es threshold filtering.
+- ⏳ **Pendiente**: Fix Decimal bug en `virtual_balance_provider.py` (warning cada ~5s). Tests pre-existentes (health/lookahead). H11 Migration ETH/SOL — pendiente.
+
+### 2026-06-28 — Incidente post-restart + close_partial fix
+
+- 🔄 Container restart de analytics-engine ~5 min atrás (instancia anterior cayó).
+- 🟡 **Posición heredada**: SELL 0.0016 BTC @ 60807.99 (ID `1d39a08e1836`) detectada en recovery. SL=61416.07 (+1.0%), TP=60199.91 (−1.0%).
+- 🟡 **current_price congelado** en 60807.99 (idéntico al entry) — posible data feed issue post-restart.
+- ⚠️ **2 inferencias post-restart**: ambas SELL (94.6% y 95.5%) pero risk manager bloqueó segunda por `position_exists` — correcto.
+- ✅ **close_partial implementado** en `CcxtBinanceTestnetAdapter` (`apps/analytics-engine/app/infrastructure/trading/ccxt_binance_adapter.py:317`) — vendía faltante para MonitorPositionsUseCase.
+- ✅ Reporte generado: `reporte_cierre_20260628.md`
+
+### 2026-06-28 — Pipeline latency diagnostic + data-engine port conflict
+
+- 🔍 **Pipeline diagnostic findings**:
+  - `tick_to_candle_ms p50 = -79.8ms`: clock skew entre `ts` (timestamp exchange Binance) y `time.time()` (reloj local). El server está ~80ms detrás del exchange. Métrica incorrecta pero pipeline no afectado — candle alignment usa exchange timestamp, no local.
+  - `tick_to_candle_ms p99 = 9.9s`: solo 20 muestras, probablemente outlier de startup (cold buffer).
+  - `candle_to_decision_ms p50 = 1.38s`, `p99 = 4.9s`: bottleneck en `TaDataPreprocessor.build_features()` (30+ indicadores TA en 500+ candles) + `MultiTimeframeAligner` (4h/1d resample).
+  - Solo 20-21 muestras en 24h de uptime → data-engine no publica ticks (caído).
+- 🟡 **Data-engine caído por port conflict**: Puerto usado por otra app en desarrollo. No puede levantar el contenedor.
+- 🟡 **Redis (argos-broker)** vivo: `ticks:btcusdt` con 2021 mensajes acumulados del último período activo.
+- 🟡 **Balance = 0** desde el incidente del Jun 27 18:00. La SELL ejecutada a las 17:35:39 dejó `free USDT = 0.0`. Todas las señales siguientes bloqueadas por `balance_invalid`.
+- 🟢 **Analytics-engine**: vivo 24h, healthy, pipeline cargado, exchange conectado, modo PAPER_TRADING.
+- ⏳ **Pendiente**: resolver port conflict del data-engine para reanudar flujo de ticks → candles → inferencias.
 

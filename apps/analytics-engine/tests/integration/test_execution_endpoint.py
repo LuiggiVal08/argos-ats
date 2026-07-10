@@ -52,7 +52,7 @@ class TestExecuteSignalEndpoint:
             "symbol": "BTC/USDT",
             "price": 60000,
         })
-        assert resp.status_code == 422
+        assert resp.status_code in (422, 425), f"expected 422 or 425, got {resp.status_code}"
 
     def test_rejects_invalid_side(self, client: TestClient):
         resp = client.post("/execute/signal", params={

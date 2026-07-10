@@ -29,3 +29,6 @@ class InMemoryTradeJournal(TradeJournal):
             if r.closed_at >= since_utc:
                 total += r.realized_pnl
         return total
+
+    async def get_all(self) -> list:
+        return list(self._records)

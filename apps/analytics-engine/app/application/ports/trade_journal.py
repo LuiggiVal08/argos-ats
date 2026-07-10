@@ -42,3 +42,8 @@ class TradeJournal(Protocol):
         """Sum of `realized_pnl` for records with `closed_at >= since_utc`.
         Raises TradeJournalError on I/O. Returns 0 if no records."""
         ...
+
+    async def get_all(self) -> list[TradeRecord]:
+        """Return every record in the journal.
+        Raises TradeJournalError on I/O. Returns [] if empty."""
+        ...
