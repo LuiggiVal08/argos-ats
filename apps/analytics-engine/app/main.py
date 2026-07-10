@@ -568,6 +568,7 @@ async def _decision_loop(
     guard_: ExecutionGuard = guard
     health: SystemHealthCollector = health_collector
     mcg = comp.market_continuity_guard
+    ctx = None
 
     last_inference_ms: int = 0
     TF_1H_MS = 3_600_000
@@ -600,23 +601,22 @@ async def _decision_loop(
                     )
                     continue
 
+                if not pipeline.is_loaded:
+                    ok = await pipeline.load_checkpoint()
+                    if not ok:
+                        log.warning("pipeline_load_failed")
+                        continue
+
                 # Temporal Hard Gate (B): skip decision if last candle is too old
                 candle_age_ms = int(time.time() * 1000) - last_ts
                 if candle_age_ms > MAX_CANDLE_AGE_MS:
                     log.warning(
-                        "decision_skipped_stale_candle",
+                        "waiting_for_fresh_candle",
                         age_ms=candle_age_ms,
-                        last_ts=last_ts,
                     )
                     continue
 
                 _decision_ts = time.monotonic_ns()
-
-                if not pipeline.is_loaded:
-                    ok = await pipeline.load_checkpoint()
-                    if not ok:
-                        log.warning("checkpoint_not_loaded_skipping")
-                        continue
 
                 last_inference_ms = (
                     int(candles[-1].get("timestamp", 0)) // TF_1H_MS
@@ -778,7 +778,49 @@ async def _decision_loop(
                         meta["ccl_adaptive_size_mult"] = risk_params.position_size_mult
                         meta["ccl_adaptive_risk_mult"] = risk_params.risk_mult
 
-                proc_result.execution_signal.metadata["source"] = "STREAMING"
+                meta["source"] = "STREAMING"
+
+                # ── Portfolio Context: clusters, cooldown, sizing ──
+                if ctx is None:
+                    from redis.asyncio import Redis
+                    from .infrastructure.trading.portfolio_context_store import (
+                        RedisPortfolioContextStore,
+                    )
+                    from .domain.entities.portfolio_context import PortfolioContext
+                    _r = redis_client or comp.broker
+                    ctx = PortfolioContext(RedisPortfolioContextStore(_r))
+                _ctx_decision = await ctx.evaluate(
+                    symbol=symbol,
+                    direction=result.signal.side.value,
+                    regime=result.regime,
+                )
+                meta["portfolio_cluster_id"] = _ctx_decision.cluster_id
+                meta["portfolio_cluster_size"] = _ctx_decision.cluster_size
+                meta["portfolio_cooldown_s"] = _ctx_decision.cooldown_remaining_s
+                meta["portfolio_size_mult"] = _ctx_decision.size_multiplier
+
+                # Record signal event for cluster tracking (always, even if blocked)
+                await ctx.record_signal_event(
+                    symbol=symbol,
+                    direction=result.signal.side.value,
+                )
+
+                if _ctx_decision.block_reason is not None:
+                    log.warning(
+                        "portfolio_blocked",
+                        reason=_ctx_decision.block_reason,
+                        cluster_id=_ctx_decision.cluster_id,
+                        cluster_size=_ctx_decision.cluster_size,
+                    )
+                    continue
+
+                if _ctx_decision.cluster_size > 1:
+                    log.info(
+                        "portfolio_cluster",
+                        cluster_id=_ctx_decision.cluster_id,
+                        size=_ctx_decision.cluster_size,
+                    )
+
                 exec_result = await guard_.execute(proc_result.execution_signal)
                 exec_approved = hasattr(exec_result, "report")
 
