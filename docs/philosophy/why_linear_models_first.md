@@ -1,0 +1,5 @@
+# Why Linear Models First?
+
+Phase 375 tested 52 configurations across 5 model families. The results were decisive: linear models (LogisticRegression, LinearSVC, Ridge) achieved a mean MCC of 0.2949 against 0.2522 for tree-based models. The best linear configuration scored 0.3732 MCC versus 0.3102 for the best gradient-boosted model. The alpha in this market regime is fundamentally linear — tree-based and deep models do not materially improve predictive power.
+
+The gap between linear and non-linear performance is only 0.0427 MCC, suggesting that feature interactions are not required for this prediction task. This has significant operational advantages: linear models are fully interpretable (coefficients map directly to feature importance), extremely fast (O[n_features] inference latency), and resistant to overfitting (far fewer parameters than deep alternatives). In a production trading system, the combination of comparable performance, lower latency, complete interpretability, and reduced operational risk makes linear models the clear first choice.

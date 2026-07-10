@@ -1,0 +1,5 @@
+# Why Sigma-Normalized Labels?
+
+Raw returns are non-stationary. Bitcoin's beta contaminates any signal learned from raw returns — in a bull market, a long-only strategy produces positive expectancy regardless of alpha, and in a bear market the reverse is true. The model would learn market direction rather than regime-relative skill. Sigma-normalization transforms the target into adimensional, stationary units: `y_i = r_i / (sigma_past * sqrt(h))`, where the denominator represents the expected volatility over the holding period.
+
+The threshold at theta = 0.5 sigma is not arbitrary — it aligns with the cost structure. At average volatility, 0.5 sigma corresponds to roughly 0.4% movement versus ~0.14% in trading costs, providing a 2.6x margin over friction. This ensures labels correspond to economically meaningful moves rather than noise. An important property is natural class balance: sigma thresholds produce approximately 25–38% of samples per class without any artificial balancing technique, avoiding the distortions introduced by oversampling or synthetic data generation.

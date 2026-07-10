@@ -1,0 +1,5 @@
+# Why Observability Before Capital?
+
+This principle was hard-earned during Phase 5.1 startup, where three distinct bugs were discovered within minutes of the first run: a `PermissionError` from incorrect log directory permissions, a `TypeError` from an event field mismatch, and a missing `checkpoint_dir` configuration. Without structured logging and health endpoints, all three failures would have been silent during live trading — the system would appear to run while silently degrading, leading to PnL impact without detection.
+
+The observability infrastructure addresses this systematically: six rotating JSON log files provide full traceability, with each inference record carrying over 22 forensic fields (`model_checksum`, `feature_hash`, `latency_ms`, `candle_age_ms`, etc.). Health endpoints expose real-time system state across all components, enabling automated detection of degradation before it becomes critical. The core insight is that in automated trading, unmeasured failures cost real money — and by the time you notice missing PnL, the damage is done. Observability is not a nice-to-have; it is the precondition for deploying capital.

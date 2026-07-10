@@ -1,0 +1,5 @@
+# Why Replay Consistency Matters
+
+The production pipeline — candle builder, feature calculator, inference engine, and signal generator — must produce outputs identical to the backtest pipeline for any given input. If they diverge, backtest metrics (Sharpe ratio, win rate, drawdown) become meaningless for predicting live performance. The discrepancy means you can never distinguish between "the model is wrong" (a research problem) and "the pipeline is different" (an engineering problem) when live results diverge from expectations.
+
+The ReplayAdapter addresses this by replaying historical ticks through the LIVE pipeline at wall-clock speed, then verifying signal parity against the backtest outputs. Phase 4 validated production-readiness specifically through this replay consistency check — confirming that the production inference pipeline reproduces the research pipeline's predictions exactly. Without this guarantee, every live deviation from backtest expectations creates ambiguity: is the strategy failing, or is the implementation diverging? Replay consistency resolves that ambiguity before capital is at risk.

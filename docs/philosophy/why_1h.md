@@ -1,0 +1,5 @@
+# Why 1H Timeframe?
+
+The choice of the 1-hour timeframe is a direct consequence of the signal-to-noise tradeoff and the data requirements of the Experience-Driven Learning (EDL) system. Lower timeframes introduce prohibitive microstructure noise: at 15 minutes, the spread consumes over 30% of the expected directional movement, meaning the cost structure dominates any potential alpha. The market at these resolutions is dominated by micro-structure effects (order book imbalance, small-lot positioning) rather than the latent regime dynamics the model is designed to capture.
+
+Higher timeframes suffer from sparse sampling. A 4-hour candle produces roughly 2,190 samples per year — reaching the 13,000-sample target required for stable training would demand over 6 years of data. The 1-hour timeframe strikes an optimal balance: approximately 8 decisions per day yields ~2,000 TradeEpisodes per year, which is sufficient for the EDL system's Bayesian inference to converge. With a signal-to-noise ratio of 0.15–0.30 and per-trade costs of ~0.15%, the 1-hour resolution produces enough episodes for the model to learn without drowning in noise or starving for data.
