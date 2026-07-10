@@ -9,8 +9,8 @@
 
 | Campo | Valor |
 |---|---|
-| Tag | `v0.9.0-forward-test` |
-| Commit | `f875c6dbbfd35e1c69387d0a0ae9c8b6c34fb4a8` |
+| Tag | `v0.9.1-forward-test` |
+| Commit | `30fcd17` |
 | Branch | `dev` |
 
 ---
@@ -25,6 +25,16 @@
 | Features | 30 |
 | Encoding | 0=SELL, 1=HOLD, 2=BUY |
 | Safety check | `streaming_inference.py:298-305` validates `classes_` against `SignalSide` |
+
+---
+
+## Model Checksums (BTC/USDT)
+
+| Archivo | MD5 |
+|---|---|
+| `models/production/btc/model.pkl` | `551be07c74d8cba6363a4852fb5b2488` |
+| `models/production/btc/scaler.pkl` | `6f9981c7f95fa72ff0615545e26ddd29` |
+| `models/production/btc/metadata.json` | `3380de611149eac0ad2dfba4ffd37151` |
 
 ---
 
@@ -95,15 +105,35 @@
 
 ---
 
+## Commits in this baseline
+
+| SHA | Description |
+|---|---|
+| `30fcd17` | docs: ADRs, runbooks, forensic reports, research |
+| `5ef390e` | test: EDL, replay, event store, observability, target leakage |
+| `c2c3dce` | feat: runtime modules (EDL, Event Sourcing, Replay, Infra, Logging) |
+| `4fec059` | docs: forward test baseline doc + tracking issues |
+| `f875c6d` | fix: label encoding in create_targets |
+
+---
+
+## How to reproduce this baseline
+
+```bash
+git checkout v0.9.1-forward-test
+pip install -r apps/analytics-engine/requirements.txt
+cd apps/analytics-engine && uvicorn app.main:app
+```
+
 ## How to compare against this baseline
 
 Any future change should be identified by:
 
 ```json
 {
-  "git_commit": "<sha>",
+  "git_commit": "30fcd17",
   "model_id": "qv2_target_spec_v1_reduced_33_primary",
-  "model_checksum": "<hash del archivo del modelo>",
+  "model_checksum": "551be07c74d8cba6363a4852fb5b2488",
   "feature_schema_version": 1,
   "portfolio_context_version": "v1"
 }
@@ -111,5 +141,5 @@ Any future change should be identified by:
 
 If a critical bug is found during forward test:
 1. Fix it on a feature branch
-2. Create new baseline: `v0.9.1-forward-test`
+2. Create new baseline: `v0.9.2-forward-test`
 3. Document what changed and why
