@@ -10,7 +10,7 @@
 | Campo | Valor |
 |---|---|
 | Tag | `v0.9.1-forward-test` |
-| Commit | `30fcd17` |
+| Commit | `06b5852` |
 | Branch | `dev` |
 
 ---
@@ -91,10 +91,11 @@
 
 - Model weights and architecture
 - Feature set (30 features)
-- Confidence thresholds
+- Confidence thresholds (regime-aware: TRENDING ≥ 0.55, RANGING ≥ 0.62)
 - Portfolio Context v1
 - Risk rules (1% cap, ATR-based SL, 5% drawdown halt)
 - Inference logic (`StreamingInferencePipeline`)
+- Execution guard configuration
 
 ## What is allowed during forward test
 
@@ -109,6 +110,7 @@
 
 | SHA | Description |
 |---|---|
+| `06b5852` | feat(analytics-engine): regime-aware execution guard + streaming inference hardening |
 | `30fcd17` | docs: ADRs, runbooks, forensic reports, research |
 | `5ef390e` | test: EDL, replay, event store, observability, target leakage |
 | `c2c3dce` | feat: runtime modules (EDL, Event Sourcing, Replay, Infra, Logging) |
@@ -131,11 +133,13 @@ Any future change should be identified by:
 
 ```json
 {
-  "git_commit": "30fcd17",
+  "git_commit": "06b5852",
   "model_id": "qv2_target_spec_v1_reduced_33_primary",
   "model_checksum": "551be07c74d8cba6363a4852fb5b2488",
   "feature_schema_version": 1,
-  "portfolio_context_version": "v1"
+  "portfolio_context_version": "v1",
+  "threshold_trending": 0.55,
+  "threshold_ranging": 0.62
 }
 ```
 
