@@ -957,7 +957,6 @@ async def _position_monitor_loop(
                         if detail.get("action") == "CLOSE":
                             pnl_str = detail.get("pnl", "0")
                             try:
-                                from decimal import Decimal
                                 await comp.virtual_balance.record_trade(Decimal(str(pnl_str)))
                             except Exception as exc:
                                 log.warning(
